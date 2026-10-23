@@ -1,5 +1,6 @@
 import { D30Printer, DENSITY_COMMANDS, describeError } from './printer.js';
 import { store } from './model.js';
+import { renderToCanvas } from './render.js';
 import { makeDesignCanvas, toPrintCanvas, packBits } from './raster.js';
 
 const $ = (id) => document.getElementById(id);
@@ -16,6 +17,7 @@ function setStatus() {
   $('status').dataset.on = printer.connected;
   $('print').disabled = !printer.connected;
   $('dPrint').disabled = !printer.connected;
+  $('printSaved').disabled = !printer.connected || !$('savedLabel').value;
 }
 
 // Draw the label text, shrinking the font until every line fits.
@@ -81,6 +83,25 @@ $('print').onclick = async () => {
     const raster = packBits(toPrintCanvas(renderDesign(), $('flip').checked));
     log(`Printing ${raster.widthBytes * 8}×${raster.rows} dots…`);
     await printer.print(raster, Number($('copies').value));
+    log('Done');
+  } catch (e) {
+    log(`Error: ${describeError(e)}`);
+  }
+  setStatus();
+};
+
+// ---- saved labels ----
+const saved = [...store.labels().map((l) => ({ ...l, from: 'Saved' })), ...store.history().map((l) => ({ ...l, from: 'Printed' }))];
+for (const [i, l] of saved.entries()) $('savedLabel').add(new Option(`${l.from}: ${l.doc.name} (${l.doc.lengthMM} mm)`, i));
+if (!saved.length) $('savedLabel').add(new Option('No saved labels in this browser', ''));
+
+$('printSaved').onclick = async () => {
+  const { doc } = saved[Number($('savedLabel').value)];
+  $('printSaved').disabled = true;
+  try {
+    const raster = packBits(toPrintCanvas(await renderToCanvas(doc)));
+    log(`Printing “${doc.name}”: ${raster.widthBytes * 8}×${raster.rows} dots, ${raster.bytes.length} bytes`);
+    await printer.print(raster, 1);
     log('Done');
   } catch (e) {
     log(`Error: ${describeError(e)}`);

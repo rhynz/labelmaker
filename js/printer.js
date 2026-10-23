@@ -150,7 +150,7 @@ export class D30Printer {
       if (cmd) await this.write(cmd.bytes(density.value)); // after ESC @ so the reset doesn't undo it
       await this.write(Uint8Array.of(0x1d, 0x76, 0x30, 0x00, w & 0xff, w >> 8, h & 0xff, h >> 8));
       await this.write(raster.bytes);
-      this.log(`Sent copy ${n + 1}/${copies} (${raster.bytes.length} bytes)`);
+      this.log(`Sent copy ${n + 1}/${copies}: ${w * 8}×${h} dots, ${raster.bytes.length} bytes`);
       if (n < copies - 1) await sleep(1500);
     }
   }

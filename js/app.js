@@ -6,9 +6,17 @@ import { Editor, ADD_TYPES, readImageFile } from './editor.js';
 import { parseCSV, readDataFile, fillDoc, placeholders, missingColumns } from './batch.js';
 
 // Shown on the print screen so it's easy to tell whether a device has picked up an update. Bump on every push.
-const BUILD = 7;
+const BUILD = 8;
 const $ = (sel) => document.querySelector(sel);
-const printer = new D30Printer((m) => console.log('[D30]', m));
+// Printer messages are kept for the log on the print screen (there's no console on iPhone).
+const printerLog = [];
+const printer = new D30Printer((m) => {
+  console.log('[D30]', m);
+  printerLog.push(`${new Date().toLocaleTimeString()} ${m}`);
+  if (printerLog.length > 200) printerLog.shift();
+  const pre = document.getElementById('printerLog');
+  if (pre) pre.textContent = printerLog.join('\n');
+});
 let tab = 'labels';
 
 // The toast is a popover where supported, so it also shows above open dialogs.
@@ -281,6 +289,7 @@ $('#print').onclick = async () => {
 };
 for (const k of settingsFields) $(`#p-${k}`).addEventListener('input', updatePrintPreview);
 $('#printCancel').onclick = () => $('#printDialog').close();
+$('#copyPrinterLog').onclick = () => navigator.clipboard.writeText(printerLog.join('\n')).then(() => toast('Log copied'), () => toast('Could not copy'));
 
 $('#printNow').onclick = async () => {
   const btn = $('#printNow');
