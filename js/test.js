@@ -1,4 +1,4 @@
-import { D30Printer, DENSITY_COMMANDS } from './printer.js';
+import { D30Printer, DENSITY_COMMANDS, describeError } from './printer.js';
 import { store } from './model.js';
 import { makeDesignCanvas, toPrintCanvas, packBits } from './raster.js';
 
@@ -68,7 +68,7 @@ $('connect').onclick = async () => {
   try {
     await printer.connect({ showAll: $('showAll').checked });
   } catch (e) {
-    log(`Error: ${e.message}`);
+    log(`Error: ${describeError(e)}`);
   }
   setStatus();
 };
@@ -83,7 +83,7 @@ $('print').onclick = async () => {
     await printer.print(raster, Number($('copies').value));
     log('Done');
   } catch (e) {
-    log(`Error: ${e.message}`);
+    log(`Error: ${describeError(e)}`);
   }
   setStatus();
 };
@@ -122,7 +122,7 @@ $('dPrint').onclick = async () => {
     await printer.print(packBits(toPrintCanvas(densityStrip(method, value))), 1, { density: { method, value } });
     log('Done');
   } catch (e) {
-    log(`Error: ${e.message}`);
+    log(`Error: ${describeError(e)}`);
   }
   setStatus();
 };

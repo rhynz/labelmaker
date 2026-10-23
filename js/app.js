@@ -1,4 +1,4 @@
-import { D30Printer } from './printer.js';
+import { D30Printer, describeError } from './printer.js';
 import { toPrintCanvas, packBits } from './raster.js';
 import { SIZES, DPM, newDoc, store } from './model.js';
 import { renderToCanvas, thumbnail } from './render.js';
@@ -36,9 +36,9 @@ async function connectPrinter() {
     printer.device.addEventListener('gattserverdisconnected', updatePrinterPill);
     toast('Printer connected');
   } catch (e) {
-    console.warn('[D30] connect failed:', e.name, e.message);
+    console.warn('[D30] connect failed:', e);
     // Closing the chooser is a NotFoundError too, but so are "Bluetooth is off" and missing permission.
-    if (!(e.name === 'NotFoundError' && /cancel/i.test(e.message))) toast(e.message || `Could not connect (${e.name})`, 5000);
+    if (!(e?.name === 'NotFoundError' && /cancel/i.test(e.message))) toast(describeError(e), 8000);
   }
   connecting = false;
   updatePrinterPill();

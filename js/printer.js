@@ -7,12 +7,34 @@
 // thermal printers, log what the printer actually has, and write to the first
 // writable characteristic we find.
 
+const uuid16 = (n) => `0000${n}-0000-1000-8000-00805f9b34fb`;
+
+// Full 128-bit UUID strings: some iOS Bluetooth browsers don't accept the short numeric form.
 export const CANDIDATE_SERVICES = [
-  0xff00, 0xffe0, 0xfff0, 0xfee7, 0x18f0, 0xae30, 0xae00, 0xae3a,
+  ...['ff00', 'ffe0', 'fff0', 'fee7', '18f0', 'ae30', 'ae00', 'ae3a'].map(uuid16),
   '49535343-fe7d-4ae5-8fa9-9fafd205e455', // Microchip/ISSC transparent UART
   'e7810a71-73ae-499d-8c15-faa9aef0c3f2',
-  '0000ff00-0000-1000-8000-00805f9b34fb',
 ];
+
+// Turns whatever a browser rejected with into readable text. Some browsers
+// (seen in Bluefy) reject with values that aren't Error objects.
+export function describeError(e) {
+  if (e == null) return 'the browser gave no details';
+  if (e && typeof e === 'object' && ('message' in e || 'name' in e)) return [e.name, e.message].filter(Boolean).join(': ') || 'unknown error';
+  if (typeof e === 'string') return e || 'unknown error';
+  try { return JSON.stringify(e) ?? String(e); } catch { return String(e); }
+}
+
+// Runs one connection step, labelling any failure with the step's name.
+async function step(what, fn) {
+  try {
+    return await fn();
+  } catch (e) {
+    const err = new Error(`Failed while ${what}: ${describeError(e)}`);
+    err.name = e?.name ?? 'Error'; // keep NotFoundError so a cancelled chooser stays recognisable
+    throw err;
+  }
+}
 
 // Setup packets sent before every job (same bytes in both reference projects).
 const INIT_PACKETS = [
@@ -48,16 +70,28 @@ export class D30Printer {
     if (!navigator.bluetooth) {
       throw new Error('Web Bluetooth not available. Use Chrome on the Mac or Bluefy on iPhone.');
     }
-    this.device = await navigator.bluetooth.requestDevice(
+    this.writeChar = null;
+    this.device = await step('choosing the printer', () => navigator.bluetooth.requestDevice(
       showAll
         ? { acceptAllDevices: true, optionalServices: CANDIDATE_SERVICES }
         : { filters: [{ namePrefix: 'D30' }], optionalServices: CANDIDATE_SERVICES },
-    );
+    ));
     this.device.addEventListener('gattserverdisconnected', () => this.log('Printer disconnected'));
     this.log(`Connecting to ${this.device.name ?? 'device'}…`);
-    const server = await this.device.gatt.connect();
+    const server = await step('connecting', () => this.device.gatt.connect());
 
-    const services = await server.getPrimaryServices().catch(() => []);
+    // Fast path: the layout the D30 is known to use (service ff00, write ff02, notify ff03).
+    try {
+      const service = await server.getPrimaryService(uuid16('ff00'));
+      this.writeChar = await service.getCharacteristic(uuid16('ff02'));
+      service.getCharacteristic(uuid16('ff03')).then((ch) => this.listen(ch)).catch(() => {});
+      this.log('Using ff00 / ff02 for printing');
+      return;
+    } catch (e) {
+      this.log(`ff00/ff02 not found (${describeError(e)}), scanning all services…`);
+    }
+
+    const services = await step('reading services', () => server.getPrimaryServices());
     if (!services.length) {
       throw new Error('Connected, but none of the candidate services exist. Check the UUIDs with nRF Connect.');
     }
@@ -65,18 +99,12 @@ export class D30Printer {
     const writable = [];
     for (const service of services) {
       this.log(`Service ${uuidShort(service.uuid)}`);
-      for (const ch of await service.getCharacteristics()) {
+      for (const ch of await step('reading characteristics', () => service.getCharacteristics())) {
         const p = ch.properties;
         const props = ['read', 'write', 'writeWithoutResponse', 'notify', 'indicate'].filter((k) => p[k]);
         this.log(`  char ${uuidShort(ch.uuid)} [${props.join(', ')}]`);
         if (p.write || p.writeWithoutResponse) writable.push(ch);
-        if (p.notify) {
-          await ch.startNotifications().catch(() => {});
-          ch.addEventListener('characteristicvaluechanged', (e) => {
-            const bytes = new Uint8Array(e.target.value.buffer);
-            this.log(`  ← ${uuidShort(ch.uuid)}: ${[...bytes].map((b) => b.toString(16).padStart(2, '0')).join(' ')}`);
-          });
-        }
+        if (p.notify) await this.listen(ch);
       }
     }
 
@@ -84,6 +112,15 @@ export class D30Printer {
     this.writeChar = writable.find((c) => uuidShort(c.uuid) === 'ff02') ?? writable[0];
     if (!this.writeChar) throw new Error('No writable characteristic found.');
     this.log(`Using ${uuidShort(this.writeChar.service.uuid)} / ${uuidShort(this.writeChar.uuid)} for printing`);
+  }
+
+  // Log what the printer sends back (status bytes).
+  async listen(ch) {
+    await ch.startNotifications().catch(() => {});
+    ch.addEventListener('characteristicvaluechanged', (e) => {
+      const bytes = new Uint8Array(e.target.value.buffer);
+      this.log(`  ← ${uuidShort(ch.uuid)}: ${[...bytes].map((b) => b.toString(16).padStart(2, '0')).join(' ')}`);
+    });
   }
 
   disconnect() {
