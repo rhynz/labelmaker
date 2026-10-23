@@ -19,8 +19,8 @@ const TEXT_STYLE = [
   { key: 'underline', label: 'Underline', kind: 'check' },
   { key: 'reverse', label: 'Reverse (white on black)', kind: 'check' },
   { key: 'align', label: 'Align', kind: 'select', options: [['left', 'Left'], ['center', 'Center'], ['right', 'Right']] },
-  { key: 'letterSpacing', label: 'Letter spacing', kind: 'number', min: -5, max: 20 },
-  { key: 'lineSpacing', label: 'Line spacing', kind: 'number', min: 0.6, max: 2, step: 0.1 },
+  { key: 'letterSpacing', label: 'Letter spacing', kind: 'slider', min: -5, max: 20 },
+  { key: 'lineSpacing', label: 'Line spacing', kind: 'slider', min: 0.6, max: 2, step: 0.05, format: (v) => `${v.toFixed(2)}×` },
 ];
 
 const FIELDS = {
@@ -605,9 +605,10 @@ export class Editor {
         range.type = 'range';
         Object.assign(range, { min: f.min, max: f.max, step: f.step ?? 1, value: el[f.key] });
         const out = document.createElement('output');
-        out.textContent = el[f.key];
+        const show = (v) => { out.textContent = f.format ? f.format(v) : v; };
+        show(el[f.key]);
         range.oninput = () => {
-          out.textContent = range.value;
+          show(Number(range.value));
           this.update({ [f.key]: Number(range.value) });
         };
         range.onchange = () => this.update({ [f.key]: Number(range.value) }, { commit: true });
