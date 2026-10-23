@@ -65,6 +65,12 @@ export class D30Printer {
     // write-without-response. Dropped bytes leave the printer waiting for the rest of
     // the label, feeding blank labels.
     this.confirmWrites = true;
+    // Raster pacing. The printer slows down on heavily black lines; sending faster than it
+    // prints overflows its buffer, the lost bytes leave it waiting for the rest of the
+    // label, and it feeds blank labels. So rows are sent at about print speed, slower for dark ones.
+    this.rowsPerChunk = 8; // 96 bytes: whole rows, under the BLE packet size
+    this.msPerRow = 7; // ~18 mm/s, a little under the printer's own speed
+    this.msPerDot = 0.06; // extra time per black dot
   }
 
   get writeMode() {
@@ -132,6 +138,24 @@ export class D30Printer {
   }
 
   // Log what the printer sends back (status bytes).
+  // Send the image a few rows at a time, no faster than the printer can print them.
+  async writeRaster({ bytes, widthBytes }) {
+    const step = widthBytes * this.rowsPerChunk;
+    const start = performance.now();
+    let due = 0; // ms after start when the next chunk may go
+    for (let i = 0; i < bytes.length; i += step) {
+      const chunk = bytes.subarray(i, i + step);
+      const wait = start + due - performance.now();
+      if (wait > 0) await sleep(wait);
+      if (this.writeMode === 'confirmed' || !this.writeChar.properties.writeWithoutResponse) await this.writeChar.writeValueWithResponse(chunk);
+      else await this.writeChar.writeValueWithoutResponse(chunk);
+      let dots = 0;
+      for (const b of chunk) for (let v = b; v; v &= v - 1) dots++;
+      due += (chunk.length / widthBytes) * this.msPerRow + dots * this.msPerDot;
+    }
+    this.log(`Image sent in ${((performance.now() - start) / 1000).toFixed(1)} s`);
+  }
+
   // Repeats of the same message are counted rather than logged one by one.
   async listen(ch) {
     await ch.startNotifications().catch(() => {});
@@ -187,7 +211,7 @@ export class D30Printer {
       const cmd = density && DENSITY_COMMANDS[density.method];
       if (cmd) await this.write(cmd.bytes(density.value)); // after ESC @ so the reset doesn't undo it
       await this.write(Uint8Array.of(0x1d, 0x76, 0x30, 0x00, w & 0xff, w >> 8, h & 0xff, h >> 8));
-      await this.write(raster.bytes);
+      await this.writeRaster(raster);
       this.log(`Sent copy ${n + 1}/${copies}: ${w * 8}×${h} dots, ${raster.bytes.length} bytes, ${this.writeMode} writes`);
       if (n < copies - 1) await sleep(1500);
     }
