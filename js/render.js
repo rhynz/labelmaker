@@ -29,12 +29,42 @@ export function formatDate(el, now = new Date()) {
   return el.prefix + el.format.replace(/YYYY|MMM|MM|DD/g, (t) => parts[t]);
 }
 
+export const elementText = (el) => (el.type === 'date' ? formatDate(el) : el.text);
+
+export const fontCSS = (el, size) => `${el.italic ? 'italic ' : ''}${el.bold ? 800 : 400} ${size}px ${el.font}`;
+const lineCount = (text) => text.split('\n').length;
+
+let measureCtx;
+function widestLine(el, text, size) {
+  measureCtx ??= document.createElement('canvas').getContext('2d');
+  measureCtx.font = fontCSS(el, size);
+  if ('letterSpacing' in measureCtx) measureCtx.letterSpacing = `${el.letterSpacing}px`;
+  return Math.max(...text.split('\n').map((l) => measureCtx.measureText(l).width));
+}
+
+// The box a text element needs to show its text at full font size.
+export function measureText(el, text) {
+  const pad = el.reverse ? 4 : 0;
+  return {
+    w: Math.ceil(widestLine(el, text, el.size) + pad * 2 + 4),
+    h: Math.ceil(el.size * (1 + el.lineSpacing * (lineCount(text) - 1)) + pad * 2 + 2),
+  };
+}
+
+// Largest font size (up to el.size) at which the text fits its box.
+export function fitFontSize(el, text) {
+  const pad = el.reverse ? 4 : 0;
+  let size = el.size;
+  for (; size > 6; size--) {
+    if (widestLine(el, text, size) <= el.w - pad * 2 && size * (1 + el.lineSpacing * (lineCount(text) - 1)) <= el.h - pad * 2) break;
+  }
+  return size;
+}
+
 function drawText(ctx, el, text) {
   const lines = text.split('\n');
   const pad = el.reverse ? 4 : 0;
   const boxW = el.w - pad * 2;
-  const boxH = el.h - pad * 2;
-  const font = (size) => `${el.italic ? 'italic ' : ''}${el.bold ? 800 : 400} ${size}px ${el.font}`;
 
   if (el.reverse) {
     ctx.fillStyle = '#000';
@@ -45,15 +75,8 @@ function drawText(ctx, el, text) {
   ctx.fillStyle = el.reverse ? '#fff' : '#000';
   ctx.textBaseline = 'middle';
   if ('letterSpacing' in ctx) ctx.letterSpacing = `${el.letterSpacing}px`;
-
-  // Shrink the font until the text fits the box.
-  let size = el.size;
-  for (; size > 6; size--) {
-    ctx.font = font(size);
-    const widest = Math.max(...lines.map((l) => ctx.measureText(l).width));
-    if (widest <= boxW && size * (1 + el.lineSpacing * (lines.length - 1)) <= boxH) break;
-  }
-  ctx.font = font(size);
+  const size = fitFontSize(el, text);
+  ctx.font = fontCSS(el, size);
 
   const lineH = size * el.lineSpacing;
   const cy = el.y + el.h / 2;
@@ -223,7 +246,8 @@ export function drawElement(ctx, el) {
 }
 
 // Draw the whole label. offset shifts everything (print calibration), in dots.
-export function draw(canvas, doc, { offset = { x: 0, y: 0 } } = {}) {
+// skip: id of an element not to draw (the editor hides text that is being typed over).
+export function draw(canvas, doc, { offset = { x: 0, y: 0 }, skip = null } = {}) {
   const { w, h } = labelDots(doc);
   canvas.width = w;
   canvas.height = h;
@@ -231,7 +255,7 @@ export function draw(canvas, doc, { offset = { x: 0, y: 0 } } = {}) {
   ctx.fillStyle = '#fff';
   ctx.fillRect(0, 0, w, h);
   ctx.translate(offset.x, offset.y);
-  for (const el of doc.elements) drawElement(ctx, el);
+  for (const el of doc.elements) if (el.id !== skip) drawElement(ctx, el);
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   return canvas;
 }

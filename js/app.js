@@ -6,7 +6,7 @@ import { Editor, ADD_TYPES, readImageFile } from './editor.js';
 import { parseCSV, readDataFile, fillDoc, placeholders, missingColumns } from './batch.js';
 
 // Shown on the print screen so it's easy to tell whether a device has picked up an update. Bump on every push.
-const BUILD = 6;
+const BUILD = 7;
 const $ = (sel) => document.querySelector(sel);
 const printer = new D30Printer((m) => console.log('[D30]', m));
 let tab = 'labels';
@@ -112,11 +112,17 @@ $('#newCreate').onclick = () => {
   try { localStorage.setItem('lastSize', id); } catch {}
   $('#newDialog').close();
   const doc = newDoc(id);
-  openEditor(doc).then(() => editor.add('text', { text: 'Double-tap to edit' }));
+  const opened = openEditor(doc); // shows the editor straight away…
+  editor.beginTyping(); // …so the keyboard can open during this tap (iOS requirement)
+  opened.then(() => editor.add('text'));
 };
 
 // ---------- editor ----------
 const editor = new Editor({ stage: $('#stage'), inspector: $('#inspector'), onChange: updateEditorBar, onMessage: toast });
+editor.onZoom = (z) => { $('#zoomFit').textContent = `${Math.round(z * 100)}%`; };
+$('#zoomIn').onclick = () => editor.setZoom(editor.zoom * 1.5);
+$('#zoomOut').onclick = () => editor.setZoom(editor.zoom / 1.5);
+$('#zoomFit').onclick = () => editor.setZoom(1);
 
 function updateEditorBar() {
   $('#undo').disabled = !editor.canUndo;

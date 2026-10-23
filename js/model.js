@@ -39,7 +39,8 @@ export function newDoc(sizeId = '12x40') {
 }
 
 const textStyle = {
-  font: FONTS[0].css, size: 48, bold: true, italic: false, underline: false,
+  auto: true, // box follows the text; turned off when the box is resized by hand
+  font: FONTS[0].css, size: 40, bold: true, italic: false, underline: false,
   align: 'center', letterSpacing: 0, lineSpacing: 1.1, reverse: false,
 };
 

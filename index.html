@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="Labels">
@@ -50,7 +50,14 @@
       <select id="docSize" aria-label="Label size"></select>
       <button class="printer-pill">○ Connect printer</button>
     </div>
-    <div class="stage-wrap"><canvas id="stage"></canvas></div>
+    <div class="stage-area">
+      <div class="stage-wrap"><canvas id="stage"></canvas></div>
+      <div class="zoom">
+        <button id="zoomOut" title="Zoom out">−</button>
+        <button id="zoomFit" title="Fit the label to the screen">100%</button>
+        <button id="zoomIn" title="Zoom in">+</button>
+      </div>
+    </div>
   </div>
   <div id="addBar" class="add-bar"></div>
   <div id="inspector" class="inspector"></div>

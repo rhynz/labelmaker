@@ -81,11 +81,25 @@ input, select, textarea {
 .editor-head { position: sticky; top: 0; z-index: 5; background: var(--bg); padding-bottom: 8px; box-shadow: 0 1px 0 var(--line); }
 .editor-head .topbar { position: static; }
 .size-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 8px; }
+.stage-area { position: relative; }
 .stage-wrap {
-  background: var(--card); border-radius: 14px; padding: 14px 16px; overflow: hidden;
+  position: relative; display: flex; min-height: 24vh; padding: 12px 12px 44px; overflow: auto;
+  background: var(--card); border-radius: 14px; overscroll-behavior: contain;
 }
+.zoom {
+  position: absolute; right: 8px; bottom: 8px; display: flex; gap: 2px; padding: 2px;
+  background: var(--bg); border-radius: 999px; box-shadow: 0 1px 4px rgba(0, 0, 0, .15);
+}
+.zoom button { padding: 5px 11px; font-size: 14px; background: transparent; min-width: 34px; }
+.typer {
+  position: absolute; left: 0; top: 0; width: 10px; height: 10px; margin: 0; border: 0; border-radius: 0;
+  box-sizing: border-box; resize: none; overflow: hidden; white-space: pre; min-width: 0;
+  outline: 2px solid var(--accent); caret-color: var(--accent); opacity: 0; pointer-events: none; z-index: 2;
+}
+.typer.on { opacity: 1; pointer-events: auto; }
+.field-typing { grid-column: 1 / -1; }
 #stage {
-  display: block; width: 100%; height: auto; image-rendering: pixelated; touch-action: none;
+  display: block; flex: none; margin: auto; height: auto; image-rendering: pixelated; touch-action: none;
   border-radius: 6px; box-shadow: 0 1px 6px rgba(0, 0, 0, .18); background: #fff;
 }
 .add-bar { display: flex; gap: 6px; overflow-x: auto; padding: 12px 0; scrollbar-width: none; }
@@ -154,3 +168,4 @@ dialog code { background: var(--bg); padding: 1px 5px; border-radius: 5px; font-
   transition: .2s; z-index: 50;
 }
 #toast.show { opacity: 1; transform: translate(-50%, 0); }
+#editor.screen { max-width: 1100px; }
