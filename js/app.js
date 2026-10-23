@@ -6,7 +6,7 @@ import { Editor, ADD_TYPES, readImageFile } from './editor.js';
 import { parseCSV, readDataFile, fillDoc, placeholders, missingColumns } from './batch.js';
 
 // Shown on the print screen so it's easy to tell whether a device has picked up an update. Bump on every push.
-const BUILD = 8;
+const BUILD = 9;
 const $ = (sel) => document.querySelector(sel);
 // Printer messages are kept for the log on the print screen (there's no console on iPhone).
 const printerLog = [];
@@ -293,11 +293,12 @@ $('#copyPrinterLog').onclick = () => navigator.clipboard.writeText(printerLog.jo
 
 $('#printNow').onclick = async () => {
   const btn = $('#printNow');
+  if (btn.disabled) return;
+  btn.disabled = true; // straight away, so a second tap can't start a second job
   const s = readSettings();
   store.saveSettings(s);
   if (!printer.connected) await connectPrinter();
-  if (!printer.connected) return;
-  btn.disabled = true;
+  if (!printer.connected) { btn.disabled = false; return; }
   $('#printStatus').textContent = 'Printing…';
   try {
     await sendToPrinter(editor.doc, s, s.copies);
@@ -388,8 +389,10 @@ $('#batchDialog').addEventListener('cancel', (e) => {
 });
 
 $('#b-print').onclick = async () => {
+  if (batch.printing) return;
+  batch.printing = true;
   if (!printer.connected) await connectPrinter();
-  if (!printer.connected) return;
+  if (!printer.connected) { batch.printing = false; updateBatch(); return; }
   const n = batch.rows.length;
   const from = Math.min(Math.max(1, Number($('#b-from').value) || 1), n);
   const to = Math.min(Math.max(from, Number($('#b-to').value) || n), n);

@@ -60,6 +60,7 @@ export class D30Printer {
     this.writeChar = null;
     this.chunkSize = 100; // bytes per BLE write
     this.chunkDelay = 20; // ms between writes, so the printer buffer keeps up
+    this.queue = Promise.resolve(); // print jobs run one at a time
   }
 
   get connected() {
@@ -83,8 +84,13 @@ export class D30Printer {
     // Fast path: the layout the D30 is known to use (service ff00, write ff02, notify ff03).
     try {
       const service = await server.getPrimaryService(uuid16('ff00'));
-      this.writeChar = await service.getCharacteristic(uuid16('ff02'));
-      service.getCharacteristic(uuid16('ff03')).then((ch) => this.listen(ch)).catch(() => {});
+      const writeChar = await service.getCharacteristic(uuid16('ff02'));
+      // Finish setting up status notifications before any print data is sent: on iPhone,
+      // overlapping Bluetooth operations can garble the data, and the printer then reads
+      // the garbage as commands (such as feeding labels).
+      await service.getCharacteristic(uuid16('ff03')).then((ch) => this.listen(ch)).catch(() => {});
+      await sleep(500); // let the link settle
+      this.writeChar = writeChar;
       this.log('Using ff00 / ff02 for printing');
       return;
     } catch (e) {
@@ -109,8 +115,10 @@ export class D30Printer {
     }
 
     // Prefer the classic Phomemo layout (ff00 / ff02) if present.
-    this.writeChar = writable.find((c) => uuidShort(c.uuid) === 'ff02') ?? writable[0];
-    if (!this.writeChar) throw new Error('No writable characteristic found.');
+    const writeChar = writable.find((c) => uuidShort(c.uuid) === 'ff02') ?? writable[0];
+    if (!writeChar) throw new Error('No writable characteristic found.');
+    await sleep(500); // let the link settle
+    this.writeChar = writeChar;
     this.log(`Using ${uuidShort(this.writeChar.service.uuid)} / ${uuidShort(this.writeChar.uuid)} for printing`);
   }
 
@@ -139,7 +147,14 @@ export class D30Printer {
 
   // raster: { bytes: Uint8Array, widthBytes, rows } — 1 bit per dot, MSB first, 1 = black.
   // density: { method: key of DENSITY_COMMANDS, value } or null for the printer's default.
-  async print(raster, copies = 1, { density = null } = {}) {
+  print(raster, copies = 1, opts = {}) {
+    // Queue behind any job still sending, so two jobs' bytes never interleave.
+    const job = this.queue.then(() => this.send(raster, copies, opts));
+    this.queue = job.catch(() => {});
+    return job;
+  }
+
+  async send(raster, copies, { density = null } = {}) {
     if (!this.connected) throw new Error('Printer not connected');
     for (let n = 0; n < copies; n++) {
       for (const p of INIT_PACKETS) await this.write(hex(p));
