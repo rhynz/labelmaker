@@ -13,7 +13,7 @@ const MIN = 6; // smallest element size, dots
 const TEXT_STYLE = [
   { key: 'auto', label: 'Fit box to text', kind: 'check' },
   { key: 'font', label: 'Font', kind: 'fonts' },
-  { key: 'size', label: 'Font size', kind: 'number', min: 6, max: 96 },
+  { key: 'size', label: 'Font size', kind: 'slider', min: 6, max: 96 },
   { key: 'bold', label: 'Bold', kind: 'check' },
   { key: 'italic', label: 'Italic', kind: 'check' },
   { key: 'underline', label: 'Underline', kind: 'check' },
@@ -599,6 +599,23 @@ export class Editor {
         input.value = el[f.key];
         input.oninput = () => this.update({ [f.key]: input.value });
         break;
+      case 'slider': {
+        // The label redraws while dragging; the change goes into undo history on release.
+        const range = document.createElement('input');
+        range.type = 'range';
+        Object.assign(range, { min: f.min, max: f.max, step: f.step ?? 1, value: el[f.key] });
+        const out = document.createElement('output');
+        out.textContent = el[f.key];
+        range.oninput = () => {
+          out.textContent = range.value;
+          this.update({ [f.key]: Number(range.value) });
+        };
+        range.onchange = () => this.update({ [f.key]: Number(range.value) }, { commit: true });
+        input = document.createElement('div');
+        input.className = 'slider';
+        input.append(range, out);
+        break;
+      }
       case 'number':
         input = document.createElement('input');
         input.type = 'number';
