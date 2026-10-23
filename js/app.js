@@ -9,29 +9,38 @@ const $ = (sel) => document.querySelector(sel);
 const printer = new D30Printer((m) => console.log('[D30]', m));
 let tab = 'labels';
 
-function toast(msg) {
+// The toast is a popover where supported, so it also shows above open dialogs.
+function toast(msg, ms = 2200) {
   const t = $('#toast');
   t.textContent = msg;
+  if (t.showPopover && !t.matches(':popover-open')) t.showPopover();
   t.classList.add('show');
   clearTimeout(toast.timer);
-  toast.timer = setTimeout(() => t.classList.remove('show'), 2200);
+  toast.timer = setTimeout(() => t.classList.remove('show'), ms);
 }
 
 // ---------- printer ----------
+let connecting = false;
 function updatePrinterPill() {
   for (const pill of document.querySelectorAll('.printer-pill')) {
     pill.dataset.on = printer.connected;
-    pill.textContent = printer.connected ? `● ${printer.device.name ?? 'Printer'}` : '○ Connect printer';
+    pill.textContent = printer.connected ? `● ${printer.device.name ?? 'Printer'}` : connecting ? 'Connecting…' : '○ Connect printer';
   }
 }
 async function connectPrinter() {
+  if (connecting) return;
+  connecting = true;
+  updatePrinterPill();
   try {
     await printer.connect();
     printer.device.addEventListener('gattserverdisconnected', updatePrinterPill);
     toast('Printer connected');
   } catch (e) {
-    if (e.name !== 'NotFoundError') toast(e.message); // NotFoundError = user closed the chooser
+    console.warn('[D30] connect failed:', e.name, e.message);
+    // Closing the chooser is a NotFoundError too, but so are "Bluetooth is off" and missing permission.
+    if (!(e.name === 'NotFoundError' && /cancel/i.test(e.message))) toast(e.message || `Could not connect (${e.name})`, 5000);
   }
+  connecting = false;
   updatePrinterPill();
 }
 document.addEventListener('click', (e) => {
