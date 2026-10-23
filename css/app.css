@@ -77,9 +77,12 @@ input, select, textarea {
 }
 
 /* editor */
-.size-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 12px; }
+/* Toolbar, size and label stay pinned while the settings below scroll, so changes are always visible. */
+.editor-head { position: sticky; top: 0; z-index: 5; background: var(--bg); padding-bottom: 8px; box-shadow: 0 1px 0 var(--line); }
+.editor-head .topbar { position: static; }
+.size-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 8px; }
 .stage-wrap {
-  background: var(--card); border-radius: 14px; padding: 24px 16px; overflow: hidden;
+  background: var(--card); border-radius: 14px; padding: 14px 16px; overflow: hidden;
 }
 #stage {
   display: block; width: 100%; height: auto; image-rendering: pixelated; touch-action: none;

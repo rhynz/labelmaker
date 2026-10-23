@@ -6,7 +6,7 @@ import { Editor, ADD_TYPES, readImageFile } from './editor.js';
 import { parseCSV, readDataFile, fillDoc, placeholders, missingColumns } from './batch.js';
 
 // Shown on the print screen so it's easy to tell whether a device has picked up an update. Bump on every push.
-const BUILD = 5;
+const BUILD = 6;
 const $ = (sel) => document.querySelector(sel);
 const printer = new D30Printer((m) => console.log('[D30]', m));
 let tab = 'labels';

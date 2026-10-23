@@ -38,18 +38,20 @@
 
 <!-- Editor -->
 <section id="editor" class="screen" hidden>
-  <header class="topbar">
-    <button id="back" class="icon-btn" title="Back">‹</button>
-    <button id="undo" class="icon-btn" title="Undo (⌘Z)">↶</button>
-    <button id="redo" class="icon-btn" title="Redo (⇧⌘Z)">↷</button>
-    <input id="docName" class="name-input" aria-label="Label name">
-    <button id="export" class="icon-btn" title="Download PNG">⤓</button>
-  </header>
-  <div class="size-row">
-    <select id="docSize" aria-label="Label size"></select>
-    <button class="printer-pill">○ Connect printer</button>
+  <div class="editor-head">
+    <header class="topbar">
+      <button id="back" class="icon-btn" title="Back">‹</button>
+      <button id="undo" class="icon-btn" title="Undo (⌘Z)">↶</button>
+      <button id="redo" class="icon-btn" title="Redo (⇧⌘Z)">↷</button>
+      <input id="docName" class="name-input" aria-label="Label name">
+      <button id="export" class="icon-btn" title="Download PNG">⤓</button>
+    </header>
+    <div class="size-row">
+      <select id="docSize" aria-label="Label size"></select>
+      <button class="printer-pill">○ Connect printer</button>
+    </div>
+    <div class="stage-wrap"><canvas id="stage"></canvas></div>
   </div>
-  <div class="stage-wrap"><canvas id="stage"></canvas></div>
   <div id="addBar" class="add-bar"></div>
   <div id="inspector" class="inspector"></div>
   <footer class="bottom">
