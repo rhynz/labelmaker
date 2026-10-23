@@ -11,20 +11,32 @@ export const SIZES = [
   [14, 25], [14, 28], [14, 30], [14, 40], [14, 50], [14, 60], [14, 74],
 ].map(([tape, length]) => ({ id: `${tape}x${length}`, tape, length, name: `${tape}×${length} mm` }));
 
+// Fonts. System fonts need no download; the rest are free Google Fonts, fetched
+// only when a label uses one or the font picker shows it (see fonts.js).
+// Web font entries are 'Family' or 'Family:weights'. Weights were checked against Google Fonts.
+const WEB_FONTS = {
+  sans: 'Roboto:400;700;900|Open Sans:400;700;800|Lato:400;700;900|Montserrat:400;700;900|Poppins:400;700;900|Inter:400;700;900|Raleway:400;700;900|Nunito:400;700;900|Work Sans:400;700;900|Rubik:400;700;900|Barlow:400;700;900|Barlow Condensed:400;700;900|Roboto Condensed:400;700;900|Archivo:400;700;900|Archivo Black|Oswald:400;700|Bebas Neue|Anton|Fredoka:400;700|Quicksand:400;700|Josefin Sans:400;700|Kanit:400;700;900|Titillium Web:400;700;900|Exo 2:400;700;900|Ubuntu:400;700|PT Sans:400;700|Source Sans 3:400;700;900|DM Sans:400;700;900|Manrope:400;800|League Spartan:400;700;900|Fjalla One|Teko:400;700|Russo One|Passion One:400;700;900|Varela Round|Comfortaa:400;700|Mulish:400;700;900|Outfit:400;700;900|Lexend:400;700;900',
+  serif: 'Roboto Slab:400;700;900|Merriweather:400;700;900|Playfair Display:400;700;900|Lora:400;700|PT Serif:400;700|Libre Baskerville:400;700|Zilla Slab:400;700|Bitter:400;700;900|Crimson Text:400;700|EB Garamond:400;700|Abril Fatface|DM Serif Display|Cinzel:400;700;900|Alfa Slab One|Arvo:400;700',
+  script: 'Pacifico|Lobster|Dancing Script:400;700|Great Vibes|Satisfy|Caveat:400;700|Kaushan Script|Permanent Marker|Shadows Into Light|Indie Flower|Amatic SC:400;700|Sacramento|Yellowtail|Courgette|Cookie|Gloria Hallelujah|Patrick Hand|Architects Daughter|Homemade Apple|Allura',
+  display: 'Bungee|Monoton|Press Start 2P|Bangers|Luckiest Guy|Creepster|Special Elite|Staatliches|Rye|Chewy|Lilita One|Titan One|Carter One|Fugaz One|Audiowide|Orbitron:400;700;900|Righteous|Black Ops One|Bowlby One SC|Ultra|Shrikhand',
+  mono: 'Roboto Mono:400;700|Space Mono:400;700|Courier Prime:400;700|Source Code Pro:400;700;900|IBM Plex Mono:400;700|JetBrains Mono:400;800',
+};
+const GENERIC = { sans: 'sans-serif', serif: 'serif', script: 'cursive', display: 'sans-serif', mono: 'monospace' };
+export const FONT_CATEGORIES = [
+  ['system', 'On this device'], ['sans', 'Sans serif'], ['serif', 'Serif'],
+  ['script', 'Script & handwriting'], ['display', 'Display'], ['mono', 'Monospace'],
+];
+
 export const FONTS = [
-  { name: 'System', css: 'system-ui, -apple-system, sans-serif' },
-  { name: 'Arial Black', css: '"Arial Black", Arial, sans-serif' },
-  { name: 'Oswald', css: '"Oswald", sans-serif', web: true },
-  { name: 'Bebas Neue', css: '"Bebas Neue", sans-serif', web: true },
-  { name: 'Anton', css: '"Anton", sans-serif', web: true },
-  { name: 'Archivo Black', css: '"Archivo Black", sans-serif', web: true },
-  { name: 'Fredoka', css: '"Fredoka", sans-serif', web: true },
-  { name: 'Roboto Slab', css: '"Roboto Slab", serif', web: true },
-  { name: 'Permanent Marker', css: '"Permanent Marker", cursive', web: true },
-  { name: 'Pacifico', css: '"Pacifico", cursive', web: true },
-  { name: 'Lobster', css: '"Lobster", cursive', web: true },
-  { name: 'Georgia', css: 'Georgia, serif' },
-  { name: 'Courier', css: '"Courier New", monospace' },
+  { name: 'System', css: 'system-ui, -apple-system, sans-serif', category: 'system' },
+  { name: 'Arial Black', css: '"Arial Black", Arial, sans-serif', category: 'system' },
+  { name: 'Helvetica', css: 'Helvetica, Arial, sans-serif', category: 'system' },
+  { name: 'Georgia', css: 'Georgia, serif', category: 'system' },
+  { name: 'Courier', css: '"Courier New", monospace', category: 'system' },
+  ...Object.entries(WEB_FONTS).flatMap(([category, list]) => list.split('|').map((entry) => {
+    const [family, weights = '400'] = entry.split(':');
+    return { name: family, css: `"${family}", ${GENERIC[category]}`, category, web: { family, weights } };
+  })),
 ];
 
 export const uid = () => Math.random().toString(36).slice(2, 10);

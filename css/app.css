@@ -97,7 +97,14 @@ input, select, textarea {
   outline: 2px solid var(--accent); caret-color: var(--accent); opacity: 0; pointer-events: none; z-index: 2;
 }
 .typer.on { opacity: 1; pointer-events: auto; }
-.field-typing { grid-column: 1 / -1; }
+.field-typing, .field-fonts { grid-column: 1 / -1; }
+.font-current { width: 100%; text-align: left; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; font-size: 18px; }
+.font-panel { margin-top: 6px; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.font-panel input[type=search] { width: 100%; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; font-size: 16px; }
+.font-list { position: relative; max-height: 260px; overflow-y: auto; display: grid; padding: 4px 0; }
+.font-list h4 { margin: 8px 12px 2px; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+.font-list button { text-align: left; border-radius: 0; padding: 7px 12px; font-size: 20px; background: transparent; line-height: 1.25; }
+.font-list button.on { background: var(--accent-soft); color: var(--accent); }
 #stage {
   display: block; flex: none; margin: auto; height: auto; image-rendering: pixelated; touch-action: none;
   border-radius: 6px; box-shadow: 0 1px 6px rgba(0, 0, 0, .18); background: #fff;

@@ -3,11 +3,11 @@
 // (stale-while-revalidate), so updates show up on the next launch.
 // Bump VERSION when files are added or removed from SHELL.
 
-const VERSION = 'v1';
+const VERSION = 'v2';
 const CACHE = `labelmaker-${VERSION}`;
 const SHELL = [
   './', 'index.html', 'test.html', 'manifest.webmanifest', 'css/app.css',
-  'js/app.js', 'js/batch.js', 'js/capture.js', 'js/editor.js', 'js/icons.js', 'js/model.js',
+  'js/app.js', 'js/batch.js', 'js/capture.js', 'js/editor.js', 'js/fonts.js', 'js/icons.js', 'js/model.js',
   'js/printer.js', 'js/raster.js', 'js/render.js', 'js/test.js',
   'vendor/JsBarcode.all.min.js', 'vendor/qrcode.js',
   'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png', 'icons/favicon.png',

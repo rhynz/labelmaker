@@ -4,6 +4,7 @@
 
 import { labelDots } from './model.js';
 import { drawIcon } from './icons.js';
+import { loadFont } from './fonts.js';
 
 const images = new Map(); // src -> HTMLImageElement
 const ditherCache = new Map(); // key -> canvas
@@ -11,7 +12,7 @@ const ditherCache = new Map(); // key -> canvas
 export async function prepare(doc) {
   const jobs = [];
   for (const el of doc.elements) {
-    if (el.font) jobs.push(document.fonts.load(`${el.bold ? 800 : 400} 40px ${el.font}`).catch(() => {}));
+    if (el.font) jobs.push(loadFont(el.font).then(() => document.fonts.load(`${el.bold ? 800 : 400} 40px ${el.font}`)).catch(() => {}));
     if (el.type === 'image' && el.src && !images.has(el.src)) {
       const img = new Image();
       images.set(el.src, img);

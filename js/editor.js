@@ -1,7 +1,8 @@
 // The label editor: canvas interaction (select, move, resize, snap),
 // undo/redo, and the inspector panel for the selected element.
 
-import { FONTS, labelDots, newElement, uid } from './model.js';
+import { FONTS, FONT_CATEGORIES, labelDots, newElement, uid } from './model.js';
+import { loadFont } from './fonts.js';
 import { prepare, draw, measureText, elementText, fitFontSize, fontCSS } from './render.js';
 import { ICONS, drawIcon } from './icons.js';
 import { recognizeText, dictate, canDictate, scanCode, canScanCodes, pickPhoto } from './capture.js';
@@ -11,7 +12,7 @@ const MIN = 6; // smallest element size, dots
 
 const TEXT_STYLE = [
   { key: 'auto', label: 'Fit box to text', kind: 'check' },
-  { key: 'font', label: 'Font', kind: 'select', options: FONTS.map((f) => [f.css, f.name]) },
+  { key: 'font', label: 'Font', kind: 'fonts' },
   { key: 'size', label: 'Font size', kind: 'number', min: 6, max: 96 },
   { key: 'bold', label: 'Bold', kind: 'check' },
   { key: 'italic', label: 'Italic', kind: 'check' },
@@ -575,7 +576,8 @@ export class Editor {
   }
 
   field(el, f) {
-    const wrap = document.createElement('label');
+    // Pickers made of many buttons can't sit inside a <label>: a tap on empty space would press the first button.
+    const wrap = document.createElement(f.kind === 'fonts' ? 'div' : 'label');
     wrap.className = `field field-${f.kind}`;
     const name = document.createElement('span');
     name.textContent = f.label;
@@ -621,6 +623,9 @@ export class Editor {
         input.accept = 'image/*';
         input.onchange = async () => input.files[0] && this.update({ src: await readImageFile(input.files[0]) }, { commit: true });
         break;
+      case 'fonts':
+        input = this.fontPicker(el);
+        break;
       case 'icons': {
         input = document.createElement('div');
         input.className = 'icon-grid';
@@ -653,6 +658,77 @@ export class Editor {
       if (tools) wrap.append(tools);
     }
     return wrap;
+  }
+
+  // Font picker: the current font as a button that opens a searchable list, each name shown in its own font.
+  fontPicker(el) {
+    const box = document.createElement('div');
+    box.className = 'font-picker';
+    const current = FONTS.find((f) => f.css === el.font) ?? { name: 'Custom', css: el.font };
+    const toggle = document.createElement('button');
+    toggle.type = 'button';
+    toggle.className = 'font-current';
+    toggle.textContent = `${current.name} ▾`;
+    loadFont(current.css).then(() => { toggle.style.fontFamily = current.css; });
+
+    const panel = document.createElement('div');
+    panel.className = 'font-panel';
+    panel.hidden = true;
+    const search = document.createElement('input');
+    search.type = 'search';
+    search.placeholder = `Search ${FONTS.length} fonts`;
+    const list = document.createElement('div');
+    list.className = 'font-list';
+    panel.append(search, list);
+
+    // Only fetch a font once its row scrolls into view.
+    const seen = new IntersectionObserver((entries) => {
+      for (const e of entries) {
+        if (!e.isIntersecting) continue;
+        const b = e.target;
+        seen.unobserve(b);
+        loadFont(b.dataset.css).then(() => { b.style.fontFamily = b.dataset.css; });
+      }
+    }, { root: list, rootMargin: '200px' });
+
+    for (const [cat, title] of FONT_CATEGORIES) {
+      const h = document.createElement('h4');
+      h.textContent = title;
+      list.append(h);
+      for (const font of FONTS.filter((x) => x.category === cat)) {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.textContent = font.name;
+        b.dataset.css = font.css;
+        b.dataset.name = font.name.toLowerCase();
+        if (font.css === el.font) b.classList.add('on');
+        b.onclick = () => {
+          this.update({ font: font.css }, { commit: true });
+          seen.disconnect();
+          this.renderInspector();
+        };
+        list.append(b);
+      }
+    }
+    search.oninput = () => {
+      const q = search.value.trim().toLowerCase();
+      for (const b of list.querySelectorAll('button')) b.hidden = q && !b.dataset.name.includes(q);
+      // Hide a category heading when nothing under it matches.
+      for (const h of list.querySelectorAll('h4')) {
+        let n = h.nextElementSibling, any = false;
+        for (; n && n.tagName === 'BUTTON'; n = n.nextElementSibling) any ||= !n.hidden;
+        h.hidden = !any;
+      }
+    };
+    toggle.onclick = () => {
+      panel.hidden = !panel.hidden;
+      if (panel.hidden) return;
+      for (const b of list.querySelectorAll('button')) if (!b.style.fontFamily) seen.observe(b);
+      const on = list.querySelector('.on'); // scroll just the list (scrollIntoView would move the page too)
+      if (on) list.scrollTop = on.offsetTop - list.clientHeight / 2;
+    };
+    box.append(toggle, panel);
+    return box;
   }
 
   // Scan / dictate buttons under a text, barcode or QR field. Results replace the field (undo restores it).
