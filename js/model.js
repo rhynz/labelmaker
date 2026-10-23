@@ -105,8 +105,13 @@ export const store = {
     h.unshift({ doc, thumb, printed: Date.now() });
     write('history', h.slice(0, 50));
   },
-  settings: () => ({ copies: 1, offsetX: 0, offsetY: 0, mirror: false, rotate180: false, density: 0, ...read('printSettings', {}) }),
-  saveSettings: (s) => write('printSettings', s),
+  settings() {
+    const saved = read('printSettings', {});
+    // v2 flipped the default print orientation, so a Rotate 180° ticked before then no longer applies.
+    if (saved.v !== 2) delete saved.rotate180;
+    return { copies: 1, offsetX: 0, offsetY: 0, mirror: false, rotate180: false, density: 0, ...saved };
+  },
+  saveSettings: (s) => write('printSettings', { ...s, v: 2 }),
   // Which density command the printer obeys, chosen on test.html (null until confirmed).
   densityMethod: () => read('densityMethod', null),
   saveDensityMethod: (m) => write('densityMethod', m),

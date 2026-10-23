@@ -14,7 +14,8 @@ export function makeDesignCanvas(lengthMM) {
   return c;
 }
 
-// Rotate the design 90° so each printed row runs across the tape.
+// Rotate the design 90° so each printed row runs across the tape. -90° comes
+// out of the D30 the right way up (checked on the real printer); flip turns it 180°.
 export function toPrintCanvas(design, flip = false) {
   const c = document.createElement('canvas');
   c.width = design.height;
@@ -23,7 +24,7 @@ export function toPrintCanvas(design, flip = false) {
   ctx.fillStyle = '#fff';
   ctx.fillRect(0, 0, c.width, c.height);
   ctx.translate(c.width / 2, c.height / 2);
-  ctx.rotate(((flip ? -90 : 90) * Math.PI) / 180);
+  ctx.rotate(((flip ? 90 : -90) * Math.PI) / 180);
   ctx.drawImage(design, -design.width / 2, -design.height / 2);
   return c;
 }
