@@ -10,6 +10,15 @@ import { recognizeText, dictate, canDictate, scanCode, canScanCodes, pickPhoto }
 const SNAP = 3; // dots
 const MIN = 6; // smallest element size, dots
 
+// Text-alignment icon: four lines lined up on one side (or centred).
+function alignIcon(side) {
+  const lines = [18, 11, 18, 13].map((w, i) => {
+    const x = side === 'left' ? 1 : side === 'right' ? 19 - w : (20 - w) / 2;
+    return `<line x1="${x}" x2="${x + w}" y1="${2 + i * 4}" y2="${2 + i * 4}"/>`;
+  });
+  return `<svg viewBox="0 0 20 16" width="22" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">${lines.join('')}</svg>`;
+}
+
 const TEXT_STYLE = [
   { key: 'auto', label: 'Fit box to text', kind: 'check' },
   { key: 'font', label: 'Font', kind: 'fonts' },
@@ -18,7 +27,7 @@ const TEXT_STYLE = [
   { key: 'italic', label: 'Italic', kind: 'check' },
   { key: 'underline', label: 'Underline', kind: 'check' },
   { key: 'reverse', label: 'Reverse (white on black)', kind: 'check' },
-  { key: 'align', label: 'Align', kind: 'select', options: [['left', 'Left'], ['center', 'Center'], ['right', 'Right']] },
+  { key: 'align', label: 'Align', kind: 'segments', options: ['left', 'center', 'right'].map((v) => [v, `Align ${v}`, alignIcon(v)]) },
   { key: 'letterSpacing', label: 'Letter spacing', kind: 'slider', min: -5, max: 20 },
   { key: 'lineSpacing', label: 'Line spacing', kind: 'slider', min: 0.6, max: 2, step: 0.05, format: (v) => `${v.toFixed(2)}×` },
 ];
@@ -577,7 +586,7 @@ export class Editor {
 
   field(el, f) {
     // Pickers made of many buttons can't sit inside a <label>: a tap on empty space would press the first button.
-    const wrap = document.createElement(f.kind === 'fonts' ? 'div' : 'label');
+    const wrap = document.createElement(f.kind === 'fonts' || f.kind === 'segments' ? 'div' : 'label');
     wrap.className = `field field-${f.kind}`;
     const name = document.createElement('span');
     name.textContent = f.label;
@@ -630,6 +639,24 @@ export class Editor {
         input.onchange = () => this.update({ [f.key]: input.checked }, { commit: true });
         wrap.append(input, name);
         return wrap;
+      case 'segments':
+        // A row of icon buttons, one per option; the current one is highlighted.
+        input = document.createElement('div');
+        input.className = 'segments';
+        for (const [value, title, icon] of f.options) {
+          const b = document.createElement('button');
+          b.type = 'button';
+          b.title = title;
+          b.setAttribute('aria-label', title);
+          b.setAttribute('aria-pressed', value === el[f.key]);
+          b.innerHTML = icon;
+          b.onclick = () => {
+            this.update({ [f.key]: value }, { commit: true });
+            for (const other of input.children) other.setAttribute('aria-pressed', other === b);
+          };
+          input.append(b);
+        }
+        break;
       case 'select':
         input = document.createElement('select');
         for (const [value, text] of f.options) input.add(new Option(text, value, false, value === el[f.key]));
