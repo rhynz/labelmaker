@@ -80,6 +80,7 @@ $('print').onclick = async () => {
   try {
     printer.chunkSize = Number($('chunk').value);
     printer.chunkDelay = Number($('delay').value);
+    printer.confirmWrites = $('confirm').checked;
     const raster = packBits(toPrintCanvas(renderDesign(), $('flip').checked));
     log(`Printing ${raster.widthBytes * 8}×${raster.rows} dots…`);
     await printer.print(raster, Number($('copies').value));

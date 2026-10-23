@@ -61,6 +61,14 @@ export class D30Printer {
     this.chunkSize = 100; // bytes per BLE write
     this.chunkDelay = 20; // ms between writes, so the printer buffer keeps up
     this.queue = Promise.resolve(); // print jobs run one at a time
+    // Confirmed writes (when the printer offers them) can't be silently dropped, unlike
+    // write-without-response. Dropped bytes leave the printer waiting for the rest of
+    // the label, feeding blank labels.
+    this.confirmWrites = true;
+  }
+
+  get writeMode() {
+    return this.confirmWrites && this.writeChar?.properties.write ? 'confirmed' : 'unconfirmed';
   }
 
   get connected() {
@@ -91,7 +99,8 @@ export class D30Printer {
       await service.getCharacteristic(uuid16('ff03')).then((ch) => this.listen(ch)).catch(() => {});
       await sleep(500); // let the link settle
       this.writeChar = writeChar;
-      this.log('Using ff00 / ff02 for printing');
+      const props = ['write', 'writeWithoutResponse', 'notify'].filter((k) => writeChar.properties[k]);
+      this.log(`Using ff00 / ff02 for printing [${props.join(', ')}], ${this.writeMode} writes`);
       return;
     } catch (e) {
       this.log(`ff00/ff02 not found (${describeError(e)}), scanning all services…`);
@@ -123,11 +132,21 @@ export class D30Printer {
   }
 
   // Log what the printer sends back (status bytes).
+  // Repeats of the same message are counted rather than logged one by one.
   async listen(ch) {
     await ch.startNotifications().catch(() => {});
+    let last = null, repeats = 0;
     ch.addEventListener('characteristicvaluechanged', (e) => {
-      const bytes = new Uint8Array(e.target.value.buffer);
-      this.log(`  ← ${uuidShort(ch.uuid)}: ${[...bytes].map((b) => b.toString(16).padStart(2, '0')).join(' ')}`);
+      const msg = [...new Uint8Array(e.target.value.buffer)].map((b) => b.toString(16).padStart(2, '0')).join(' ');
+      if (msg === last) {
+        repeats++;
+        if (repeats % 50 === 0) this.log(`  ← ${uuidShort(ch.uuid)}: ${msg} (×${repeats + 1} so far)`);
+        return;
+      }
+      if (repeats) this.log(`  ← ${uuidShort(ch.uuid)}: ${last} (×${repeats + 1} in total)`);
+      last = msg;
+      repeats = 0;
+      this.log(`  ← ${uuidShort(ch.uuid)}: ${msg}`);
     });
   }
 
@@ -137,11 +156,15 @@ export class D30Printer {
 
   async write(bytes) {
     const c = this.writeChar;
+    const confirmed = this.writeMode === 'confirmed' || !c.properties.writeWithoutResponse;
     for (let i = 0; i < bytes.length; i += this.chunkSize) {
       const chunk = bytes.subarray(i, i + this.chunkSize);
-      if (c.properties.writeWithoutResponse) await c.writeValueWithoutResponse(chunk);
-      else await c.writeValueWithResponse(chunk);
-      if (this.chunkDelay) await sleep(this.chunkDelay);
+      if (confirmed) {
+        await c.writeValueWithResponse(chunk); // the acknowledgement paces the transfer
+      } else {
+        await c.writeValueWithoutResponse(chunk);
+        if (this.chunkDelay) await sleep(this.chunkDelay);
+      }
     }
   }
 
@@ -165,7 +188,7 @@ export class D30Printer {
       if (cmd) await this.write(cmd.bytes(density.value)); // after ESC @ so the reset doesn't undo it
       await this.write(Uint8Array.of(0x1d, 0x76, 0x30, 0x00, w & 0xff, w >> 8, h & 0xff, h >> 8));
       await this.write(raster.bytes);
-      this.log(`Sent copy ${n + 1}/${copies}: ${w * 8}×${h} dots, ${raster.bytes.length} bytes`);
+      this.log(`Sent copy ${n + 1}/${copies}: ${w * 8}×${h} dots, ${raster.bytes.length} bytes, ${this.writeMode} writes`);
       if (n < copies - 1) await sleep(1500);
     }
   }
