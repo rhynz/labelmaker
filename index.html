@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Labels">
+  <meta name="theme-color" content="#e14b3b">
+  <title>Label Maker</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/favicon.png">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anton&family=Archivo+Black&family=Bebas+Neue&family=Fredoka:wght@400;700&family=Lobster&family=Oswald:wght@400;700&family=Pacifico&family=Permanent+Marker&family=Roboto+Slab:wght@400;800&display=swap">
+  <link rel="stylesheet" href="css/app.css">
+  <script src="vendor/JsBarcode.all.min.js"></script>
+  <script src="vendor/qrcode.js"></script>
+</head>
+<body>
+
+<!-- Home -->
+<section id="home" class="screen">
+  <header class="topbar">
+    <h1>Labels</h1>
+    <button class="printer-pill">○ Connect printer</button>
+  </header>
+  <p id="noBluetooth" class="banner" hidden>This browser can't use Bluetooth. Open this page in Chrome on the Mac, or in the Bluefy browser on iPhone.</p>
+  <nav class="tabs">
+    <button class="tab on" data-tab="labels">My labels</button>
+    <button class="tab" data-tab="history">Print history</button>
+  </nav>
+  <p id="empty" class="hint"></p>
+  <div id="grid" class="grid"></div>
+  <button id="newLabel" class="fab">＋ New label</button>
+</section>
+
+<!-- Editor -->
+<section id="editor" class="screen" hidden>
+  <header class="topbar">
+    <button id="back" class="icon-btn" title="Back">‹</button>
+    <button id="undo" class="icon-btn" title="Undo (⌘Z)">↶</button>
+    <button id="redo" class="icon-btn" title="Redo (⇧⌘Z)">↷</button>
+    <input id="docName" class="name-input" aria-label="Label name">
+    <button id="export" class="icon-btn" title="Download PNG">⤓</button>
+  </header>
+  <div class="size-row">
+    <select id="docSize" aria-label="Label size"></select>
+    <button class="printer-pill">○ Connect printer</button>
+  </div>
+  <div class="stage-wrap"><canvas id="stage"></canvas></div>
+  <div id="addBar" class="add-bar"></div>
+  <div id="inspector" class="inspector"></div>
+  <footer class="bottom">
+    <button id="save">Save</button>
+    <button id="batch">Batch</button>
+    <button id="print" class="primary">Print label</button>
+  </footer>
+</section>
+
+<!-- New label -->
+<dialog id="newDialog">
+  <h2>New label</h2>
+  <label class="field">Label size <select id="newSize"></select></label>
+  <div class="dialog-actions">
+    <button onclick="this.closest('dialog').close()">Cancel</button>
+    <button id="newCreate" class="primary">Create</button>
+  </div>
+</dialog>
+
+<!-- Print -->
+<dialog id="printDialog">
+  <h2>Print preview</h2>
+  <div class="print-preview"><canvas id="printPreview"></canvas></div>
+  <div class="settings">
+    <label>Copies <input id="p-copies" type="number" min="1" max="50" value="1"></label>
+    <label>Move horizontally (mm) <input id="p-offsetX" type="number" step="0.5" min="-10" max="10" value="0"></label>
+    <label>Move vertically (mm) <input id="p-offsetY" type="number" step="0.5" min="-5" max="5" value="0"></label>
+    <label id="p-densityRow" hidden>Darkness <select id="p-density"></select></label>
+    <label class="check"><input id="p-mirror" type="checkbox"> Mirror</label>
+    <label class="check"><input id="p-rotate180" type="checkbox"> Rotate 180°</label>
+  </div>
+  <div class="row-between">
+    <button class="printer-pill">○ Connect printer</button>
+    <span id="printStatus"></span>
+  </div>
+  <div class="dialog-actions">
+    <button id="printCancel">Close</button>
+    <button id="printNow" class="primary">Print now</button>
+  </div>
+</dialog>
+
+<!-- Batch print -->
+<dialog id="batchDialog">
+  <h2>Batch print</h2>
+  <p class="hint">Each row of a spreadsheet prints one label. Put column names in double braces, like <code>{{Name}}</code>, in a text, date prefix, barcode or QR field.</p>
+  <div class="row-between">
+    <label class="file-btn">Choose CSV or Excel file<input id="b-file" type="file" accept=".csv,.tsv,.txt,.xlsx,.xls,.ods,.numbers,text/csv,text/tab-separated-values"></label>
+    <span id="b-info" class="hint"></span>
+  </div>
+  <details class="paste">
+    <summary>Or paste rows</summary>
+    <textarea id="b-paste" rows="4" placeholder="Name,Code&#10;Apples,1001&#10;Pears,1002"></textarea>
+  </details>
+  <div id="b-columnsWrap" hidden>
+    <p class="hint">Tap a column to add it to the selected element:</p>
+    <div id="b-columns" class="chips"></div>
+  </div>
+  <p id="b-warn" class="banner" hidden></p>
+  <div class="print-preview"><canvas id="b-preview"></canvas></div>
+  <div class="stepper">
+    <button id="b-prev" class="icon-btn" title="Previous row">‹</button>
+    <span id="b-row"></span>
+    <button id="b-next" class="icon-btn" title="Next row">›</button>
+  </div>
+  <div class="settings">
+    <label>Print rows <span><input id="b-from" type="number" min="1" value="1"> to <input id="b-to" type="number" min="1" value="1"></span></label>
+    <label>Copies of each <input id="b-copies" type="number" min="1" max="20" value="1"></label>
+  </div>
+  <p class="hint">Uses the offset, darkness and mirror settings from the print screen.</p>
+  <div class="row-between">
+    <button class="printer-pill">○ Connect printer</button>
+    <span id="b-status"></span>
+  </div>
+  <div class="dialog-actions">
+    <button id="b-close">Close</button>
+    <button id="b-print" class="primary" disabled>Print all</button>
+  </div>
+</dialog>
+
+<div id="toast"></div>
+<script type="module" src="js/app.js"></script>
+</body>
+</html>
