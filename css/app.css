@@ -122,10 +122,15 @@ input, select, textarea {
 .inspector { background: var(--card); border-radius: 14px; padding: 14px; display: grid; gap: 12px; }
 .inspector .hint { margin: 0; }
 .actions { display: flex; flex-wrap: wrap; gap: 6px; }
-.inspector .actions { flex-wrap: nowrap; gap: 0; padding: 2px; background: var(--bg); border-radius: 10px; }
-.action-sep { flex: none; width: 1px; margin: 7px 2px; background: var(--line); }
-.actions button { flex: 1 1 0; min-width: 0; max-width: 52px; padding: 7px 0; border-radius: 8px; background: transparent; color: var(--text); line-height: 0; }
-.actions button svg { width: 20px; height: 20px; max-width: 100%; }
+.inspector .actions {
+  /* One row that scrolls sideways when the screen is too narrow for every button. */
+  display: flex; flex-wrap: nowrap !important; gap: 0; padding: 2px; overflow-x: auto; overscroll-behavior-x: contain;
+  background: var(--bg); border-radius: 10px; scrollbar-width: none; -webkit-overflow-scrolling: touch;
+}
+.inspector .actions::-webkit-scrollbar { display: none; }
+.action-sep { flex: none; width: 1px; margin: 7px 3px; background: var(--line); }
+.actions button { flex: none; width: 38px; padding: 8px 0; border-radius: 8px; background: transparent; color: var(--text); line-height: 0; }
+.actions button svg { width: 20px; height: 20px; }
 .actions button:active { background: var(--card); }
 .actions button.danger { color: var(--accent); }
 .fields { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px 12px; }
