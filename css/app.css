@@ -160,6 +160,16 @@ input, select, textarea {
 .icon-lib-grid button { aspect-ratio: 1; padding: 8px; border-radius: 10px; background: #fff; border: 2px solid transparent; }
 .icon-lib-grid button.on { border-color: var(--accent); }
 .icon-lib-grid img { width: 100%; height: 100%; display: block; }
+.my-icons { max-height: none; overflow: visible; padding: 8px 8px 2px 2px; margin-bottom: 4px; }
+.icon-upload { display: grid; place-items: center; align-content: center; aspect-ratio: 1; border: 2px dashed var(--line); border-radius: 10px; cursor: pointer; color: var(--muted); line-height: 1; }
+.icon-upload span { font-size: 22px; }
+.icon-upload small { font-size: 10px; margin-top: 2px; }
+.icon-upload input { display: none; }
+.my-icon { position: relative; }
+.my-icon > button:first-child { width: 100%; aspect-ratio: 1; padding: 6px; border-radius: 10px; background: #fff; border: 2px solid transparent; }
+.my-icon > button.on { border-color: var(--accent); }
+.my-icon img { width: 100%; height: 100%; object-fit: contain; display: block; }
+.my-icons .my-icon-delete { position: absolute; aspect-ratio: auto; border: 0; top: -6px; right: -6px; width: 20px; height: 20px; padding: 0; border-radius: 50%; font-size: 14px; line-height: 20px; background: var(--card); color: var(--muted); box-shadow: 0 1px 3px rgba(0, 0, 0, .3); }
 .icon-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(48px, 1fr)); gap: 6px; }
 .icon-grid button { padding: 4px; border-radius: 10px; background: var(--bg); border: 2px solid transparent; }
 .icon-grid button.on { border-color: var(--accent); }

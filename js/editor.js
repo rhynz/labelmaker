@@ -1,7 +1,7 @@
 // The label editor: canvas interaction (select, move, resize, snap),
 // undo/redo, and the inspector panel for the selected element.
 
-import { FONTS, FONT_CATEGORIES, labelDots, newElement, uid } from './model.js';
+import { FONTS, FONT_CATEGORIES, labelDots, newElement, store, uid } from './model.js';
 import { loadFont } from './fonts.js';
 import { ICON_STYLES, iconURL, loadCatalog, fetchIconSVG } from './iconlib.js';
 import { prepare, draw, measureText, elementText, fitFontSize, fontCSS } from './render.js';
@@ -96,6 +96,19 @@ export const ADD_TYPES = [
   ['text', 'Text', 'T'], ['date', 'Date', '📅'], ['icon', 'Icon', '♥'], ['border', 'Border', '▢'],
   ['shape', 'Shape', '◯'], ['line', 'Line', '—'], ['barcode', 'Barcode', '║'], ['qr', 'QR', '▦'], ['image', 'Image', '🖼'],
 ];
+
+// An uploaded icon file as { svg } (SVG text, kept sharp at any size) or { img } (a PNG data URL).
+export async function readIconFile(file) {
+  if (file.type === 'image/svg+xml' || /\.svg$/i.test(file.name)) {
+    if (file.size > 200_000) throw new Error('That SVG is too large (over 200 KB)');
+    let svg = await file.text();
+    if (!/<svg[\s>]/i.test(svg)) throw new Error('That file is not an SVG image');
+    // Safari can't draw an SVG image without a size, so give it one when it only has a viewBox.
+    if (!/<svg[^>]*\swidth=/i.test(svg)) svg = svg.replace(/<svg/i, '<svg width="256" height="256"');
+    return { svg };
+  }
+  return { img: await readImageFile(file, 256) };
+}
 
 // Downscale an uploaded image and return it as a PNG data URL.
 export function readImageFile(file, maxSide = 400) {
@@ -779,7 +792,7 @@ export class Editor {
       ctx.fillRect(0, 0, 48, 48);
       drawIcon(ctx, name, 6, 6, 36, 36);
       b.append(c);
-      b.onclick = () => choose({ icon: name, svg: null, style: null });
+      b.onclick = () => choose({ icon: name, svg: null, img: null, style: null });
       classic.append(b);
     }
 
@@ -832,7 +845,7 @@ export class Editor {
         b.onclick = async () => {
           b.disabled = true;
           try {
-            await choose({ icon: `ph:${n}`, style, svg: await fetchIconSVG(n, style) });
+            await choose({ icon: `ph:${n}`, style, svg: await fetchIconSVG(n, style), img: null });
           } catch (e) {
             this.onMessage(e.message);
             b.disabled = false;
@@ -873,8 +886,61 @@ export class Editor {
       }
     });
 
+    // My icons: uploaded files, saved in this browser for reuse.
+    const mine = document.createElement('div');
+    mine.className = 'icon-lib-grid my-icons';
+    const showMine = () => {
+      const upload = document.createElement('label');
+      upload.className = 'icon-upload';
+      upload.title = 'Upload an icon (PNG, JPG or SVG)';
+      upload.innerHTML = '<span>＋</span><small>Upload</small>';
+      const file = Object.assign(document.createElement('input'), { type: 'file', accept: 'image/*,.svg', multiple: true });
+      file.onchange = async () => {
+        const list = store.myIcons();
+        let added = null;
+        for (const f of file.files) {
+          try {
+            added = { id: uid(), name: f.name.replace(/\.[^.]+$/, ''), ...(await readIconFile(f)) };
+            list.push(added);
+          } catch (e) {
+            this.onMessage(e.message);
+          }
+        }
+        if (!added) return;
+        if (!store.saveMyIcons(list)) return this.onMessage('Not enough storage for that icon. Try a smaller file.');
+        await choose({ icon: `my:${added.id}`, style: null, svg: added.svg ?? null, img: added.img ?? null });
+      };
+      upload.append(file);
+      mine.replaceChildren(upload, ...store.myIcons().map((ic) => {
+        const tile = document.createElement('div');
+        tile.className = 'my-icon';
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.title = ic.name;
+        if (el.icon === `my:${ic.id}`) b.className = 'on';
+        const img = document.createElement('img');
+        img.alt = '';
+        img.src = ic.svg ? `data:image/svg+xml;charset=utf-8,${encodeURIComponent(ic.svg)}` : ic.img;
+        b.append(img);
+        b.onclick = () => choose({ icon: `my:${ic.id}`, style: null, svg: ic.svg ?? null, img: ic.img ?? null });
+        const del = document.createElement('button');
+        del.type = 'button';
+        del.className = 'my-icon-delete';
+        del.title = `Remove “${ic.name}” from My icons`;
+        del.textContent = '×';
+        del.onclick = () => {
+          if (!confirm(`Remove “${ic.name}” from My icons? Labels already using it keep it.`)) return;
+          store.saveMyIcons(store.myIcons().filter((x) => x.id !== ic.id));
+          showMine();
+        };
+        tile.append(b, del);
+        return tile;
+      }));
+    };
+    showMine();
+
     const title = (t) => Object.assign(document.createElement('h4'), { textContent: t, className: 'icon-heading' });
-    box.append(title('Classic'), classic, title('Icon library'), lib);
+    box.append(title('My icons'), mine, title('Classic'), classic, title('Icon library'), lib);
     return box;
   }
 

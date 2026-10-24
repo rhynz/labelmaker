@@ -125,6 +125,9 @@ export const store = {
     return { copies: 1, offsetX: 0, offsetY: 0, mirror: false, rotate180: false, density: 0, ...saved };
   },
   saveSettings: (s) => write('printSettings', { ...s, v: 2 }),
+  // Icons the user uploaded: [{ id, name, svg }] or [{ id, name, img }] (a PNG data URL).
+  myIcons: () => read('myIcons', []),
+  saveMyIcons: (list) => write('myIcons', list),
   // Which density command the printer obeys, chosen on test.html (null until confirmed).
   densityMethod: () => read('densityMethod', null),
   saveDensityMethod: (m) => write('densityMethod', m),

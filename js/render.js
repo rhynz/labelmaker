@@ -13,10 +13,11 @@ export async function prepare(doc) {
   const jobs = [];
   for (const el of doc.elements) {
     if (el.font) jobs.push(loadFont(el.font).then(() => document.fonts.load(`${el.bold ? 800 : 400} 40px ${el.font}`)).catch(() => {}));
-    if (el.type === 'icon' && el.svg && !images.has(svgSrc(el.svg))) {
+    const iconSrc = el.type === 'icon' && iconImageSrc(el);
+    if (iconSrc && !images.has(iconSrc)) {
       const img = new Image();
-      images.set(svgSrc(el.svg), img);
-      jobs.push(new Promise((res) => { img.onload = img.onerror = res; img.src = svgSrc(el.svg); }));
+      images.set(iconSrc, img);
+      jobs.push(new Promise((res) => { img.onload = img.onerror = res; img.src = iconSrc; }));
     }
     if (el.type === 'image' && el.src && !images.has(el.src)) {
       const img = new Image();
@@ -29,13 +30,18 @@ export async function prepare(doc) {
 
 const svgSrc = (svg) => `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
 
-// Library icons carry their own SVG; the classic ones are drawn from icons.js.
+// Library and uploaded icons carry their own picture (SVG text or a PNG data URL);
+// the classic ones are drawn from icons.js.
+const iconImageSrc = (el) => (el.svg ? svgSrc(el.svg) : el.img || null);
+
 function drawIconElement(ctx, el) {
-  if (!el.svg) return drawIcon(ctx, el.icon, el.x, el.y, el.w, el.h);
-  const img = images.get(svgSrc(el.svg));
+  const src = iconImageSrc(el);
+  if (!src) return drawIcon(ctx, el.icon, el.x, el.y, el.w, el.h);
+  const img = images.get(src);
   if (!img?.naturalWidth) return;
-  const s = Math.min(el.w, el.h);
-  ctx.drawImage(img, el.x + (el.w - s) / 2, el.y + (el.h - s) / 2, s, s);
+  const s = Math.min(el.w / img.naturalWidth, el.h / img.naturalHeight); // fit inside the box, keep its shape
+  const dw = img.naturalWidth * s, dh = img.naturalHeight * s;
+  ctx.drawImage(img, el.x + (el.w - dw) / 2, el.y + (el.h - dh) / 2, dw, dh);
 }
 
 export function formatDate(el, now = new Date()) {
