@@ -97,10 +97,14 @@ input, select, textarea {
   outline: 2px solid var(--accent); caret-color: var(--accent); opacity: 0; pointer-events: none; z-index: 2;
 }
 .typer.on { opacity: 1; pointer-events: auto; }
-.field-typing, .field-fonts, .field-slider { grid-column: 1 / -1; }
+.field-typing, .field-fonts, .field-slider, .field-stylebar { grid-column: 1 / -1; }
 .segments { display: inline-flex; gap: 2px; padding: 2px; background: var(--bg); border: 1px solid var(--line); border-radius: 10px; justify-self: start; }
 .segments button { padding: 6px 14px; border-radius: 8px; background: transparent; color: var(--muted); line-height: 0; }
 .segments button[aria-pressed=true] { background: var(--card); color: var(--accent); box-shadow: 0 1px 3px rgba(0, 0, 0, .15); }
+.stylebar { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; overscroll-behavior-x: contain; }
+.stylebar::-webkit-scrollbar { display: none; }
+.stylebar .segments { flex: none; }
+.stylebar .segments button { padding: 6px 0; width: 36px; min-width: 0; }
 .toggles button { min-width: 36px; padding: 5px 8px; line-height: 1; font-size: 17px; }
 .toggles svg { display: block; width: 18px; height: 18px; margin: auto; }
 .toggles .serif { font-family: Georgia, serif; }

@@ -38,18 +38,20 @@ function alignIcon(side) {
 }
 
 const TEXT_STYLE = [
-  { key: 'box', label: 'Text box', kind: 'toggles', options: [['auto', 'Fit box to text', ACTION_ICONS.fitText]] },
   { key: 'font', label: 'Font', kind: 'fonts' },
   { key: 'size', label: 'Font size', kind: 'slider', min: 6, max: 96 },
   {
-    key: 'style', label: 'Style', kind: 'toggles', options: [
+    // One row: on/off toggles, then the three alignment buttons.
+    key: 'style', label: 'Style', kind: 'stylebar',
+    toggles: [
+      ['auto', 'Fit box to text', ACTION_ICONS.fitText],
       ['bold', 'Bold', '<b>B</b>'],
       ['italic', 'Italic', '<i class="serif">I</i>'],
       ['underline', 'Underline', '<u>U</u>'],
       ['reverse', 'Reverse (white on black)', '<span class="rev">A</span>'],
     ],
+    align: ['left', 'center', 'right'].map((v) => [v, `Align ${v}`, alignIcon(v)]),
   },
-  { key: 'align', label: 'Align', kind: 'segments', options: ['left', 'center', 'right'].map((v) => [v, `Align ${v}`, alignIcon(v)]) },
   { key: 'letterSpacing', label: 'Letter spacing', kind: 'slider', min: -5, max: 20 },
   { key: 'lineSpacing', label: 'Line spacing', kind: 'slider', min: 0.6, max: 2, step: 0.05, format: (v) => `${v.toFixed(2)}×` },
 ];
@@ -625,7 +627,7 @@ export class Editor {
 
   field(el, f) {
     // Pickers made of many buttons can't sit inside a <label>: a tap on empty space would press the first button.
-    const wrap = document.createElement(['fonts', 'segments', 'toggles'].includes(f.kind) ? 'div' : 'label');
+    const wrap = document.createElement(['fonts', 'stylebar'].includes(f.kind) ? 'div' : 'label');
     wrap.className = `field field-${f.kind}`;
     const name = document.createElement('span');
     name.textContent = f.label;
@@ -678,42 +680,10 @@ export class Editor {
         input.onchange = () => this.update({ [f.key]: input.checked }, { commit: true });
         wrap.append(input, name);
         return wrap;
-      case 'segments':
-        // A row of icon buttons, one per option; the current one is highlighted.
+      case 'stylebar':
         input = document.createElement('div');
-        input.className = 'segments';
-        for (const [value, title, icon] of f.options) {
-          const b = document.createElement('button');
-          b.type = 'button';
-          b.title = title;
-          b.setAttribute('aria-label', title);
-          b.setAttribute('aria-pressed', value === el[f.key]);
-          b.innerHTML = icon;
-          b.onclick = () => {
-            this.update({ [f.key]: value }, { commit: true });
-            for (const other of input.children) other.setAttribute('aria-pressed', other === b);
-          };
-          input.append(b);
-        }
-        break;
-      case 'toggles':
-        // On/off icon buttons, each switching its own setting (e.g. bold, italic).
-        input = document.createElement('div');
-        input.className = 'segments toggles';
-        for (const [key, title, icon] of f.options) {
-          const b = document.createElement('button');
-          b.type = 'button';
-          b.title = title;
-          b.setAttribute('aria-label', title);
-          b.setAttribute('aria-pressed', !!el[key]);
-          b.innerHTML = icon;
-          b.onclick = () => {
-            const on = !el[key];
-            this.update({ [key]: on }, { commit: true });
-            b.setAttribute('aria-pressed', on);
-          };
-          input.append(b);
-        }
+        input.className = 'stylebar';
+        input.append(this.toggleButtons(el, f.toggles), this.choiceButtons(el, 'align', f.align));
         break;
       case 'select':
         input = document.createElement('select');
@@ -761,6 +731,47 @@ export class Editor {
       if (tools) wrap.append(tools);
     }
     return wrap;
+  }
+
+  // Icon buttons choosing one value for `key` (e.g. text alignment); the current one is highlighted.
+  choiceButtons(el, key, options) {
+    const group = document.createElement('div');
+    group.className = 'segments';
+    for (const [value, title, icon] of options) {
+      const b = this.iconButton(title, icon, value === el[key]);
+      b.onclick = () => {
+        this.update({ [key]: value }, { commit: true });
+        for (const other of group.children) other.setAttribute('aria-pressed', other === b);
+      };
+      group.append(b);
+    }
+    return group;
+  }
+
+  // On/off icon buttons, each switching its own setting (e.g. bold, italic).
+  toggleButtons(el, options) {
+    const group = document.createElement('div');
+    group.className = 'segments toggles';
+    for (const [key, title, icon] of options) {
+      const b = this.iconButton(title, icon, !!el[key]);
+      b.onclick = () => {
+        const on = !el[key];
+        this.update({ [key]: on }, { commit: true });
+        b.setAttribute('aria-pressed', on);
+      };
+      group.append(b);
+    }
+    return group;
+  }
+
+  iconButton(title, icon, pressed) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.title = title;
+    b.setAttribute('aria-label', title);
+    b.setAttribute('aria-pressed', pressed);
+    b.innerHTML = icon;
+    return b;
   }
 
   // Font picker: the current font as a button that opens a searchable list, each name shown in its own font.
