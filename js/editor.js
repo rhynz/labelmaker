@@ -10,6 +10,20 @@ import { recognizeText, dictate, canDictate, scanCode, canScanCodes, pickPhoto }
 const SNAP = 3; // dots
 const MIN = 6; // smallest element size, dots
 
+// Icons for the element action buttons (20×20, drawn in the current text colour).
+const svg = (body) => `<svg viewBox="0 0 20 20" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${body}</svg>`;
+const ACTION_ICONS = {
+  left: svg('<line x1="2.5" y1="2" x2="2.5" y2="18"/><rect x="5.5" y="6" width="11" height="8" rx="1.5"/>'),
+  centerH: svg('<line x1="10" y1="2" x2="10" y2="18" stroke-dasharray="2 2"/><rect x="4.5" y="6" width="11" height="8" rx="1.5"/>'),
+  right: svg('<line x1="17.5" y1="2" x2="17.5" y2="18"/><rect x="3.5" y="6" width="11" height="8" rx="1.5"/>'),
+  centerV: svg('<line x1="2" y1="10" x2="18" y2="10" stroke-dasharray="2 2"/><rect x="6" y="4.5" width="8" height="11" rx="1.5"/>'),
+  fill: svg('<path d="M3 7V3h4M13 3h4v4M17 13v4h-4M7 17H3v-4"/><rect x="7" y="7" width="6" height="6" rx="1"/>'),
+  front: svg('<rect x="2.5" y="2.5" width="10" height="10" rx="1.5" stroke-dasharray="2 2"/><rect x="7.5" y="7.5" width="10" height="10" rx="1.5" fill="currentColor"/>'),
+  back: svg('<rect x="2.5" y="2.5" width="10" height="10" rx="1.5" fill="currentColor"/><rect x="7.5" y="7.5" width="10" height="10" rx="1.5" fill="var(--card)"/>'),
+  duplicate: svg('<rect x="6.5" y="6.5" width="11" height="11" rx="1.5"/><path d="M13.5 6.5V4a1.5 1.5 0 0 0-1.5-1.5H4A1.5 1.5 0 0 0 2.5 4v8A1.5 1.5 0 0 0 4 13.5h2.5"/>'),
+  delete: svg('<path d="M3 5h14M8 5V3h4v2M5 5l1 12h8l1-12M8.5 8.5v6M11.5 8.5v6"/>'),
+};
+
 // Text-alignment icon: four lines lined up on one side (or centred).
 function alignIcon(side) {
   const lines = [18, 11, 18, 13].map((w, i) => {
@@ -512,9 +526,11 @@ export class Editor {
   alignTo(where) {
     const el = this.selected;
     const { w, h } = labelDots(this.doc);
+    if (where === 'left') el.x = 0;
+    if (where === 'right') el.x = w - el.w;
     if (where === 'h') el.x = Math.round((w - el.w) / 2);
     if (where === 'v') el.y = Math.round((h - el.h) / 2);
-    if (where === 'fill') Object.assign(el, { x: 4, y: 4, w: w - 8, h: h - 8 });
+    if (where === 'fill') Object.assign(el, { x: 4, y: 4, w: w - 8, h: h - 8, auto: false }); // keep the stretched box
     this.render();
     this.commit();
   }
@@ -561,21 +577,33 @@ export class Editor {
 
     const actions = document.createElement('div');
     actions.className = 'actions';
-    const btn = (label, fn, title = label) => {
-      const b = document.createElement('button');
-      b.textContent = label;
-      b.title = title;
-      b.onclick = fn;
-      actions.append(b);
-    };
-    btn('↔ Center', () => this.alignTo('h'), 'Center horizontally');
-    btn('↕ Center', () => this.alignTo('v'), 'Center vertically');
-    btn('⤢ Fill', () => this.alignTo('fill'), 'Fill the label');
-    btn('Front', () => this.reorder(true), 'Bring to front');
-    btn('Back', () => this.reorder(false), 'Send to back');
-    btn('Duplicate', () => this.duplicate());
-    btn('Delete', () => this.remove());
-    actions.lastChild.classList.add('danger');
+    // Icon buttons in groups: position, size, layering, then copy/delete.
+    const groups = [
+      [['left', 'Move to the left edge', () => this.alignTo('left')],
+        ['centerH', 'Center horizontally', () => this.alignTo('h')],
+        ['right', 'Move to the right edge', () => this.alignTo('right')],
+        ['centerV', 'Center vertically', () => this.alignTo('v')]],
+      [['fill', 'Fill the label', () => this.alignTo('fill')]],
+      [['front', 'Bring to front', () => this.reorder(true)],
+        ['back', 'Send to back', () => this.reorder(false)]],
+      [['duplicate', 'Duplicate', () => this.duplicate()],
+        ['delete', 'Delete', () => this.remove()]],
+    ];
+    for (const group of groups) {
+      const g = document.createElement('div');
+      g.className = 'action-group';
+      for (const [icon, title, fn] of group) {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.title = title;
+        b.setAttribute('aria-label', title);
+        b.innerHTML = ACTION_ICONS[icon];
+        b.onclick = fn;
+        if (icon === 'delete') b.classList.add('danger');
+        g.append(b);
+      }
+      actions.append(g);
+    }
     box.append(actions);
 
     const grid = document.createElement('div');

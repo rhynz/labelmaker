@@ -122,7 +122,11 @@ input, select, textarea {
 .inspector { background: var(--card); border-radius: 14px; padding: 14px; display: grid; gap: 12px; }
 .inspector .hint { margin: 0; }
 .actions { display: flex; flex-wrap: wrap; gap: 6px; }
-.actions button { font-size: 13px; padding: 6px 10px; background: var(--bg); }
+.actions { gap: 8px; }
+.action-group { display: flex; gap: 2px; padding: 2px; background: var(--bg); border-radius: 10px; }
+.actions button { padding: 7px 9px; border-radius: 8px; background: transparent; color: var(--text); line-height: 0; }
+.actions button:active { background: var(--card); }
+.actions button.danger { color: var(--accent); }
 .fields { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px 12px; }
 .field { display: grid; gap: 4px; font-size: 13px; color: var(--muted); }
 .field-textarea, .field-icons, .field-text { grid-column: 1 / -1; }
