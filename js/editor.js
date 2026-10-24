@@ -952,7 +952,7 @@ export class Editor {
       b.className = value === current ? 'on' : '';
       const c = document.createElement('canvas');
       c.width = 180;
-      c.height = value === 'vertical' || value === 'circle' ? 120 : 80;
+      c.height = 120; // same height for all, so the row lines up
       const ctx = c.getContext('2d');
       ctx.fillStyle = '#fff';
       ctx.fillRect(0, 0, c.width, c.height);
@@ -965,11 +965,22 @@ export class Editor {
       label.textContent = name;
       b.append(c, label);
       b.onclick = async () => {
+        const scroll = grid.scrollLeft;
         await this.update({ warp: value, curve: el.curve ?? 50 }, { commit: true });
         this.renderInspector();
+        const next = this.inspector?.querySelector('.shape-grid');
+        if (next) next.scrollLeft = scroll; // keep the row where it was
       };
       grid.append(b);
     }
+    // Bring the chosen shape into view when the row opens scrolled away from it.
+    requestAnimationFrame(() => {
+      const on = grid.querySelector('.on');
+      if (!on) return;
+      const left = on.offsetLeft - grid.offsetLeft, right = left + on.offsetWidth;
+      if (left < grid.scrollLeft) grid.scrollLeft = left;
+      else if (right > grid.scrollLeft + grid.clientWidth) grid.scrollLeft = right - grid.clientWidth;
+    });
     return grid;
   }
 

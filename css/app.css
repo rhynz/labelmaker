@@ -173,8 +173,8 @@ input, select, textarea {
 .my-icon img { width: 100%; height: 100%; object-fit: contain; display: block; }
 .my-icons .my-icon-delete { position: absolute; aspect-ratio: auto; border: 0; top: -6px; right: -6px; width: 20px; height: 20px; padding: 0; border-radius: 50%; font-size: 14px; line-height: 20px; background: var(--card); color: var(--muted); box-shadow: 0 1px 3px rgba(0, 0, 0, .3); }
 .field-borders, .field-shapes, .field-rotation { grid-column: 1 / -1; min-width: 0; }
-.shape-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(76px, 1fr)); gap: 6px; }
-.shape-grid button { display: grid; gap: 3px; align-content: start; padding: 5px; border-radius: 10px; background: var(--bg); border: 2px solid transparent; color: var(--text); font-size: 12px; }
+.shape-grid { display: flex; gap: 6px; overflow-x: auto; overscroll-behavior-x: contain; scroll-snap-type: x proximity; padding-bottom: 4px; -webkit-overflow-scrolling: touch; }
+.shape-grid button { flex: 0 0 76px; scroll-snap-align: start; display: grid; gap: 3px; align-content: start; padding: 5px; border-radius: 10px; background: var(--bg); border: 2px solid transparent; color: var(--text); font-size: 12px; }
 .shape-grid button.on { border-color: var(--accent); }
 .shape-grid canvas { width: 100%; display: block; border-radius: 4px; }
 .rotation { display: flex; align-items: center; gap: 10px; }
