@@ -4,6 +4,7 @@
 
 import { labelDots } from './model.js';
 import { drawIcon } from './icons.js';
+import { drawBorderDesign } from './borders.js';
 import { loadFont } from './fonts.js';
 
 const images = new Map(); // src -> HTMLImageElement
@@ -113,36 +114,6 @@ function drawText(ctx, el, text) {
     if (el.underline) ctx.fillRect(x, y + size * 0.45, width, Math.max(2, size / 14));
   });
   if ('letterSpacing' in ctx) ctx.letterSpacing = '0px';
-}
-
-function drawBorder(ctx, el) {
-  const s = el.stroke;
-  ctx.lineWidth = s;
-  ctx.strokeStyle = '#000';
-  const inset = (n) => [el.x + n + s / 2, el.y + n + s / 2, el.w - 2 * n - s, el.h - 2 * n - s];
-  ctx.setLineDash(el.style === 'dashed' ? [s * 3, s * 2] : el.style === 'dotted' ? [s, s * 1.5] : []);
-  ctx.lineCap = el.style === 'dotted' ? 'round' : 'butt';
-  ctx.beginPath();
-  if (el.style === 'rounded' || el.style === 'dashed' || el.style === 'dotted') ctx.roundRect(...inset(0), 12);
-  else ctx.rect(...inset(0));
-  if (el.style === 'double') ctx.rect(...inset(s * 2));
-  if (el.style === 'ticket') {
-    // Rectangle with scooped corners.
-    const [x, y, w, h] = inset(0);
-    const r = Math.min(10, h / 4);
-    ctx.beginPath();
-    ctx.moveTo(x + r, y);
-    ctx.lineTo(x + w - r, y);
-    ctx.arc(x + w, y, r, Math.PI, Math.PI / 2, true);
-    ctx.lineTo(x + w, y + h - r);
-    ctx.arc(x + w, y + h, r, -Math.PI / 2, Math.PI, true);
-    ctx.lineTo(x + r, y + h);
-    ctx.arc(x, y + h, r, 0, -Math.PI / 2, true);
-    ctx.lineTo(x, y + r);
-    ctx.arc(x, y, r, Math.PI / 2, 0, true);
-  }
-  ctx.stroke();
-  ctx.setLineDash([]);
 }
 
 function drawShape(ctx, el) {
@@ -257,7 +228,7 @@ export function drawElement(ctx, el) {
   switch (el.type) {
     case 'text': drawText(ctx, el, el.text); break;
     case 'date': drawText(ctx, el, formatDate(el)); break;
-    case 'border': drawBorder(ctx, el); break;
+    case 'border': drawBorderDesign(ctx, el); break;
     case 'shape': drawShape(ctx, el); break;
     case 'line': drawLine(ctx, el); break;
     case 'barcode': drawBarcode(ctx, el); break;

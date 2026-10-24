@@ -170,6 +170,15 @@ input, select, textarea {
 .my-icon > button.on { border-color: var(--accent); }
 .my-icon img { width: 100%; height: 100%; object-fit: contain; display: block; }
 .my-icons .my-icon-delete { position: absolute; aspect-ratio: auto; border: 0; top: -6px; right: -6px; width: 20px; height: 20px; padding: 0; border-radius: 50%; font-size: 14px; line-height: 20px; background: var(--card); color: var(--muted); box-shadow: 0 1px 3px rgba(0, 0, 0, .3); }
+.field-borders { grid-column: 1 / -1; min-width: 0; }
+.border-picker { min-width: 0; }
+.border-tabs { display: flex; max-width: 100%; overflow-x: auto; scrollbar-width: none; margin-bottom: 8px; }
+.border-tabs::-webkit-scrollbar { display: none; }
+.border-tabs button { flex: none; padding: 6px 12px; line-height: 1.2; font-size: 14px; }
+.border-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 8px; max-height: 320px; overflow-y: auto; padding: 2px; }
+.border-grid button { display: grid; gap: 4px; padding: 6px; border-radius: 10px; background: var(--bg); border: 2px solid transparent; color: var(--text); font-size: 12px; }
+.border-grid button.on { border-color: var(--accent); }
+.border-grid canvas { width: 100%; display: block; border-radius: 4px; }
 .icon-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(48px, 1fr)); gap: 6px; }
 .icon-grid button { padding: 4px; border-radius: 10px; background: var(--bg); border: 2px solid transparent; }
 .icon-grid button.on { border-color: var(--accent); }

@@ -4,7 +4,8 @@
 import { FONTS, FONT_CATEGORIES, labelDots, newElement, store, uid } from './model.js';
 import { loadFont } from './fonts.js';
 import { ICON_STYLES, iconURL, loadCatalog, fetchIconSVG } from './iconlib.js';
-import { prepare, draw, measureText, elementText, fitFontSize, fontCSS } from './render.js';
+import { BORDER_CATEGORIES, borderDesign, bordersIn } from './borders.js';
+import { prepare, draw, drawElement, measureText, elementText, fitFontSize, fontCSS } from './render.js';
 import { ICONS, drawIcon } from './icons.js';
 import { recognizeText, dictate, canDictate, scanCode, canScanCodes, pickPhoto } from './capture.js';
 
@@ -66,8 +67,8 @@ const FIELDS = {
     ...TEXT_STYLE,
   ],
   border: [
-    { key: 'style', label: 'Style', kind: 'select', options: [['single', 'Square'], ['rounded', 'Rounded'], ['double', 'Double'], ['dashed', 'Dashed'], ['dotted', 'Dotted'], ['ticket', 'Ticket']] },
-    { key: 'stroke', label: 'Thickness', kind: 'number', min: 1, max: 12 },
+    { key: 'stroke', label: 'Thickness', kind: 'slider', min: 1, max: 12 },
+    { key: 'style', label: 'Design', kind: 'borders' },
   ],
   shape: [
     { key: 'shape', label: 'Shape', kind: 'select', options: [['rect', 'Rectangle'], ['rounded', 'Rounded'], ['ellipse', 'Ellipse']] },
@@ -641,7 +642,7 @@ export class Editor {
 
   field(el, f) {
     // Pickers made of many buttons can't sit inside a <label>: a tap on empty space would press the first button.
-    const wrap = document.createElement(['fonts', 'stylebar', 'icons'].includes(f.kind) ? 'div' : 'label');
+    const wrap = document.createElement(['fonts', 'stylebar', 'icons', 'borders'].includes(f.kind) ? 'div' : 'label');
     wrap.className = `field field-${f.kind}`;
     const name = document.createElement('span');
     name.textContent = f.label;
@@ -675,7 +676,10 @@ export class Editor {
           show(Number(range.value));
           this.update({ [f.key]: Number(range.value) });
         };
-        range.onchange = () => this.update({ [f.key]: Number(range.value) }, { commit: true });
+        range.onchange = () => {
+          this.update({ [f.key]: Number(range.value) }, { commit: true });
+          if (el.type === 'border') this.refreshBorders?.(); // previews show the new thickness
+        };
         input = document.createElement('div');
         input.className = 'slider';
         input.append(range, out);
@@ -715,6 +719,9 @@ export class Editor {
         break;
       case 'icons':
         input = this.iconPicker(el);
+        break;
+      case 'borders':
+        input = this.borderPicker(el);
         break;
     }
     // Text-like inputs commit to undo history when editing pauses.
@@ -770,6 +777,61 @@ export class Editor {
 
   // Icon picker: the classic built-in icons, then the Phosphor library with occasion
   // collections, categories, search and a solid/outline choice.
+  // Border designs in tabs, each shown as a small preview at this border's size and thickness.
+  borderPicker(el) {
+    const box = document.createElement('div');
+    box.className = 'border-picker';
+    const tabs = document.createElement('div');
+    tabs.className = 'segments border-tabs';
+    const grid = document.createElement('div');
+    grid.className = 'border-grid';
+    if (!bordersIn(this.borderTab ?? '').some((b) => b.id === el.style)) {
+      this.borderTab = bordersIn('Popular').some((b) => b.id === el.style) ? 'Popular' : borderDesign(el.style).cat;
+    }
+
+    const preview = (b) => {
+      const k = Math.min(3, 220 / el.w);
+      const c = document.createElement('canvas');
+      c.width = Math.ceil(el.w * k) + 4;
+      c.height = Math.ceil(el.h * k) + 4;
+      const ctx = c.getContext('2d');
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(0, 0, c.width, c.height);
+      ctx.translate(2, 2);
+      ctx.scale(k, k);
+      drawElement(ctx, { type: 'border', x: 0, y: 0, w: el.w, h: el.h, style: b.id, stroke: el.stroke });
+      return c;
+    };
+    const show = () => {
+      for (const t of tabs.children) t.setAttribute('aria-pressed', t.dataset.cat === this.borderTab);
+      grid.replaceChildren(...bordersIn(this.borderTab).map((b) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = b.id === el.style ? 'on' : '';
+        const name = document.createElement('span');
+        name.textContent = b.name;
+        btn.append(preview(b), name);
+        btn.onclick = async () => {
+          await this.update({ style: b.id }, { commit: true });
+          for (const other of grid.children) other.className = other === btn ? 'on' : '';
+        };
+        return btn;
+      }));
+    };
+    for (const cat of BORDER_CATEGORIES) {
+      const t = document.createElement('button');
+      t.type = 'button';
+      t.textContent = cat;
+      t.dataset.cat = cat;
+      t.onclick = () => { this.borderTab = cat; show(); };
+      tabs.append(t);
+    }
+    show();
+    this.refreshBorders = show;
+    box.append(tabs, grid);
+    return box;
+  }
+
   iconPicker(el) {
     const box = document.createElement('div');
     box.className = 'icon-picker';
