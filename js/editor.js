@@ -1,7 +1,7 @@
 // The label editor: canvas interaction (select, move, resize, snap),
 // undo/redo, and the inspector panel for the selected element.
 
-import { FONTS, FONT_CATEGORIES, labelDots, newElement, store, uid } from './model.js';
+import { DPM, FONTS, FONT_CATEGORIES, labelDots, newElement, store, uid } from './model.js';
 import { loadFont } from './fonts.js';
 import { ICON_STYLES, iconURL, loadCatalog, fetchIconSVG } from './iconlib.js';
 import { BORDER_CATEGORIES, borderDesign, bordersIn } from './borders.js';
@@ -9,7 +9,8 @@ import { prepare, draw, drawElement, measureText, elementText, fitFontSize, font
 import { ICONS, drawIcon } from './icons.js';
 import { recognizeText, dictate, canDictate, scanCode, canScanCodes, pickPhoto } from './capture.js';
 
-const SNAP = 3; // dots
+const SNAP_PX = 7; // how close (in screen pixels) an edge or centre must come to snap
+const RULER = 16; // ruler thickness in CSS pixels
 const MIN = 6; // smallest element size, dots
 
 // Icons for the element action buttons (20×20, drawn in the current text colour).
@@ -144,6 +145,13 @@ export class Editor {
     this.scale = 4; // canvas pixels per dot, set by layout()
     this.pointers = new Map(); // active touches/mouse, for pinch-zoom
     this.wrap = stage.parentElement; // scrolls when zoomed in
+    // Millimetre rulers along the top and left of the label; they scroll with it.
+    this.rulers = ['top', 'left'].map((side) => {
+      const c = document.createElement('canvas');
+      c.className = `ruler ruler-${side}`;
+      this.wrap.append(c);
+      return c;
+    });
     stage.addEventListener('pointerdown', (e) => this.down(e));
     stage.addEventListener('pointermove', (e) => this.move(e));
     stage.addEventListener('pointerup', (e) => this.up(e));
@@ -292,7 +300,7 @@ export class Editor {
   // At zoom 1 the label fills the available width (but no more than ~40% of the screen height).
   layout() {
     const { w, h } = labelDots(this.doc);
-    const avail = this.wrap.clientWidth - 24;
+    const avail = this.wrap.clientWidth - 40; // room for the side padding and the left ruler
     const fit = Math.max(100, Math.min(avail, (innerHeight * 0.4 * w) / h));
     const css = Math.round(fit * this.zoom);
     this.stage.style.width = `${css}px`;
@@ -333,19 +341,10 @@ export class Editor {
     ctx.imageSmoothingEnabled = false;
     ctx.drawImage(this.label, 0, 0, s.width, s.height);
 
-    ctx.strokeStyle = '#e14b3b';
-    ctx.lineWidth = 1.5;
-    ctx.setLineDash([4, 4]);
-    for (const g of this.guides) {
-      ctx.beginPath();
-      if (g.axis === 'x') { ctx.moveTo(g.at * S, 0); ctx.lineTo(g.at * S, s.height); }
-      else { ctx.moveTo(0, g.at * S); ctx.lineTo(s.width, g.at * S); }
-      ctx.stroke();
-    }
-    ctx.setLineDash([]);
-
+    const px = s.width / (s.clientWidth || s.width); // canvas pixels per CSS pixel
     const el = this.selected;
     if (el) {
+      ctx.strokeStyle = '#e14b3b';
       ctx.lineWidth = 2;
       ctx.strokeRect(el.x * S, el.y * S, el.w * S, el.h * S);
       ctx.fillStyle = '#e14b3b';
@@ -353,7 +352,126 @@ export class Editor {
       ctx.arc((el.x + el.w) * S, (el.y + el.h) * S, 10, 0, Math.PI * 2);
       ctx.fill();
     }
+    // Alignment guides: solid when lining up with another element, dashed for the label's centre and edges.
+    ctx.strokeStyle = '#1d8cf8';
+    ctx.lineWidth = 1.5 * px;
+    for (const g of this.guides) {
+      ctx.setLineDash(g.label ? [4 * px, 4 * px] : []);
+      ctx.beginPath();
+      if (g.axis === 'x') { ctx.moveTo(g.at * S, g.lo * S); ctx.lineTo(g.at * S, g.hi * S); }
+      else { ctx.moveTo(g.lo * S, g.at * S); ctx.lineTo(g.hi * S, g.at * S); }
+      ctx.stroke();
+    }
+    ctx.setLineDash([]);
+
+    if (el && this.drag?.el === el && this.drag.moved) this.drawMeasure(ctx, el, S, px);
+    this.drawRulers();
     this.placeTyper();
+  }
+
+  // Position or size in millimetres, shown next to the element while it is dragged.
+  drawMeasure(ctx, el, S, px) {
+    const mm = (v) => (v / DPM).toFixed(1);
+    const text = this.drag.mode === 'resize' ? `${mm(el.w)} × ${mm(el.h)} mm` : `X ${mm(el.x)}  Y ${mm(el.y)} mm`;
+    ctx.font = `600 ${12 * px}px -apple-system, system-ui, sans-serif`;
+    const tw = ctx.measureText(text).width + 12 * px, th = 20 * px;
+    const W = ctx.canvas.width, H = ctx.canvas.height;
+    let x = Math.min(Math.max(0, el.x * S), W - tw);
+    let y = el.y * S - th - 4 * px;
+    if (y < 0) y = (el.y + el.h) * S + 4 * px; // no room above: put it below
+    if (y + th > H) y = Math.max(0, Math.min(H - th, el.y * S + 4 * px)); // nor below: inside
+    ctx.fillStyle = 'rgba(30, 30, 32, .85)';
+    ctx.beginPath();
+    ctx.roundRect(x, y, tw, th, th / 2);
+    ctx.fill();
+    ctx.fillStyle = '#fff';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(text, x + 6 * px, y + th / 2);
+  }
+
+  drawRulers() {
+    const { w, h } = labelDots(this.doc);
+    const st = this.stage, cs = getComputedStyle(this.wrap);
+    const ink = cs.getPropertyValue('--muted').trim() || '#888';
+    const accent = cs.getPropertyValue('--accent').trim() || '#e14b3b';
+    const dpr = devicePixelRatio || 1;
+    const el = this.selected;
+    this.rulers.forEach((c, i) => {
+      const top = i === 0;
+      const len = top ? st.clientWidth : st.clientHeight;
+      if (!len) return;
+      const cw = top ? len : RULER, ch = top ? RULER : len;
+      Object.assign(c.style, {
+        width: `${cw}px`, height: `${ch}px`,
+        left: `${top ? st.offsetLeft : st.offsetLeft - RULER - 3}px`,
+        top: `${top ? st.offsetTop - RULER - 3 : st.offsetTop}px`,
+      });
+      c.width = Math.round(cw * dpr);
+      c.height = Math.round(ch * dpr);
+      const ctx = c.getContext('2d');
+      ctx.scale(dpr, dpr);
+      const perDot = len / (top ? w : h); // CSS px per dot
+      const pos = (dots) => dots * perDot;
+      const at = (along, across, l, t) => (top ? ctx.fillRect(along, across, l, t) : ctx.fillRect(across, along, t, l));
+      // The selected element's extent, and the guides being snapped to.
+      if (el) {
+        ctx.fillStyle = accent;
+        ctx.globalAlpha = 0.22;
+        const a = top ? el.x : el.y, b = top ? el.w : el.h;
+        at(pos(a), 0, pos(b), RULER);
+        ctx.globalAlpha = 1;
+      }
+      ctx.fillStyle = '#1d8cf8';
+      for (const g of this.guides) if ((g.axis === 'x') === top) at(pos(g.at) - 1, 0, 2, RULER);
+      // Ticks every millimetre, longer every 5, numbered every 10 (every 5 when zoomed in).
+      const mmPx = perDot * DPM;
+      const every = mmPx > 14 ? 5 : 10;
+      ctx.fillStyle = ink;
+      ctx.font = '9px -apple-system, system-ui, sans-serif';
+      ctx.textBaseline = 'top';
+      const total = (top ? w : h) / DPM;
+      for (let mm = 0; mm <= total + 0.001; mm++) {
+        const x = Math.min(len - 1, Math.round(mm * mmPx));
+        const tick = mm % 10 === 0 ? RULER * 0.6 : mm % 5 === 0 ? RULER * 0.4 : RULER * 0.22;
+        if (mmPx >= 3 || mm % 5 === 0) at(x, RULER - tick, 1, tick);
+        if (mm % every === 0 && mm > 0 && mm < total - 1) {
+          if (top) ctx.fillText(String(mm), x + 2, 1);
+          else { ctx.save(); ctx.translate(1, x + 2); ctx.fillText(String(mm), 0, 0); ctx.restore(); }
+        }
+      }
+    });
+  }
+
+  // Where a moving or resized element can line up: the label's edges and centre, and the
+  // edges and centres of every other element. lo/hi is the span the guide line covers.
+  snapTargets(el) {
+    const { w, h } = labelDots(this.doc);
+    const xs = [0, w / 2, w].map((at) => ({ at, lo: 0, hi: h, label: true }));
+    const ys = [0, h / 2, h].map((at) => ({ at, lo: 0, hi: w, label: true }));
+    for (const o of this.doc.elements) {
+      if (o === el) continue;
+      for (const at of [o.x, o.x + o.w / 2, o.x + o.w]) xs.push({ at, lo: o.y, hi: o.y + o.h });
+      for (const at of [o.y, o.y + o.h / 2, o.y + o.h]) ys.push({ at, lo: o.x, hi: o.x + o.w });
+    }
+    return { x: xs, y: ys };
+  }
+
+  // The smallest shift (within tol) that lines one of the anchors up with a target.
+  static nearest(anchors, targets, tol) {
+    let best = null;
+    for (const a of anchors) for (const t of targets) {
+      const d = t.at - a;
+      if (Math.abs(d) <= tol && (!best || Math.abs(d) < Math.abs(best))) best = d;
+    }
+    return best;
+  }
+
+  // Guides for every target that the element now lines up with on this axis.
+  addGuides(axis, anchors, targets, lo, hi) {
+    for (const t of targets) {
+      if (!anchors.some((a) => Math.abs(a - t.at) < 0.5)) continue;
+      this.guides.push({ axis, at: t.at, label: !!t.label, lo: t.label ? t.lo : Math.min(lo, t.lo), hi: t.label ? t.hi : Math.max(hi, t.hi) });
+    }
   }
 
   // ---- pointer interaction ----
@@ -419,26 +537,40 @@ export class Editor {
     const p = this.toDots(e);
     const dx = p.x - start.x;
     const dy = p.y - start.y;
-    const { w, h } = labelDots(this.doc);
     this.guides = [];
+    this.drag.moved ||= Math.hypot(dx, dy) * p.perDot > 3;
+    if (!this.drag.moved) return;
+    // Snapping lines edges and centres up with the label and with other elements.
+    const tol = SNAP_PX / p.perDot;
+    const targets = this.snapTargets(el);
+    const xAnchors = () => [el.x, el.x + el.w / 2, el.x + el.w];
+    const yAnchors = () => [el.y, el.y + el.h / 2, el.y + el.h];
     if (mode === 'move') {
       el.x = Math.round(orig.x + dx);
       el.y = Math.round(orig.y + dy);
-      // Snap element centre or edges to the label centre and edges.
-      const cx = el.x + el.w / 2;
-      const cy = el.y + el.h / 2;
-      if (Math.abs(cx - w / 2) < SNAP) { el.x = Math.round(w / 2 - el.w / 2); this.guides.push({ axis: 'x', at: w / 2 }); }
-      if (Math.abs(cy - h / 2) < SNAP) { el.y = Math.round(h / 2 - el.h / 2); this.guides.push({ axis: 'y', at: h / 2 }); }
-      if (Math.abs(el.x) < SNAP) el.x = 0;
-      if (Math.abs(el.y) < SNAP) el.y = 0;
-      if (Math.abs(el.x + el.w - w) < SNAP) el.x = w - el.w;
-      if (Math.abs(el.y + el.h - h) < SNAP) el.y = h - el.h;
+      el.x += Editor.nearest(xAnchors(), targets.x, tol) ?? 0;
+      el.y += Editor.nearest(yAnchors(), targets.y, tol) ?? 0;
     } else {
       el.auto = false; // a hand-sized box keeps its size; the font shrinks to fit it
       el.w = Math.max(MIN, Math.round(orig.w + dx));
       el.h = Math.max(el.type === 'line' ? 1 : MIN, Math.round(orig.h + dy));
-      if (el.type === 'qr' || el.type === 'icon') el.w = el.h = Math.max(el.w, el.h);
+      if (el.type === 'qr' || el.type === 'icon') {
+        // Square: grow to the larger side, snapping whichever edge is closer to a guide.
+        el.w = el.h = Math.max(el.w, el.h);
+        const fx = Editor.nearest([el.x + el.w], targets.x, tol), fy = Editor.nearest([el.y + el.h], targets.y, tol);
+        const d = fx !== null && (fy === null || Math.abs(fx) <= Math.abs(fy)) ? fx : fy;
+        if (d !== null) el.w = el.h = Math.max(MIN, el.w + d);
+      } else {
+        const sx = Editor.nearest([el.x + el.w], targets.x, tol);
+        const sy = Editor.nearest([el.y + el.h], targets.y, tol);
+        if (sx !== null) el.w = Math.max(MIN, el.w + sx);
+        if (sy !== null) el.h = Math.max(el.type === 'line' ? 1 : MIN, el.h + sy);
+      }
     }
+    const xa = mode === 'move' ? xAnchors() : [el.x + el.w];
+    const ya = mode === 'move' ? yAnchors() : [el.y + el.h];
+    this.addGuides('x', xa, targets.x, el.y, el.y + el.h);
+    this.addGuides('y', ya, targets.y, el.x, el.x + el.w);
     this.render();
   }
 

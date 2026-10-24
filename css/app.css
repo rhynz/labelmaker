@@ -83,9 +83,10 @@ input, select, textarea {
 .size-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 8px; }
 .stage-area { position: relative; }
 .stage-wrap {
-  position: relative; display: flex; min-height: 24vh; padding: 12px 12px 44px; overflow: auto;
+  position: relative; display: flex; min-height: 24vh; padding: 24px 12px 44px 28px; overflow: auto;
   background: var(--card); border-radius: 14px; overscroll-behavior: contain;
 }
+.ruler { position: absolute; pointer-events: none; }
 .zoom {
   position: absolute; right: 8px; bottom: 8px; display: flex; gap: 2px; padding: 2px;
   background: var(--bg); border-radius: 999px; box-shadow: 0 1px 4px rgba(0, 0, 0, .15);
