@@ -150,7 +150,7 @@
   // file is requested as ?v=<build>, a URL the browser can't have cached from an older build.
   (async () => {
     const ENTRY = 'app', CSS = 'css/app.css';
-    const MODULES = ['app', 'batch', 'capture', 'editor', 'fonts', 'icons', 'model', 'printer', 'raster', 'render', 'test'];
+    const MODULES = ['app', 'batch', 'capture', 'editor', 'fonts', 'iconlib', 'icons', 'model', 'printer', 'raster', 'render', 'test'];
     let build = null;
     try { build = (await (await fetch('version.json', { cache: 'no-store' })).json()).build; } catch {} // offline: use what we have
     const params = new URLSearchParams(location.search);

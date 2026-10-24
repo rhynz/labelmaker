@@ -150,6 +150,16 @@ input, select, textarea {
 .capture button { font-size: 13px; padding: 5px 11px; background: var(--bg); color: var(--text); }
 .field-check { display: flex; align-items: center; gap: 8px; color: var(--text); font-size: 14px; }
 .field-check input { width: 18px; height: 18px; accent-color: var(--accent); }
+.field-icons { grid-column: 1 / -1; }
+.icon-heading { margin: 4px 0 6px; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+.icon-lib-controls { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
+.icon-lib-controls select { flex: 1 1 160px; min-width: 0; }
+.icon-lib-controls input[type=search] { flex: 1 1 120px; min-width: 0; font-size: 16px; }
+.icon-styles button { width: auto !important; padding: 5px 12px; line-height: 1.2; font-size: 14px; }
+.icon-lib-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(48px, 1fr)); gap: 6px; max-height: 280px; overflow-y: auto; padding: 2px; }
+.icon-lib-grid button { aspect-ratio: 1; padding: 8px; border-radius: 10px; background: #fff; border: 2px solid transparent; }
+.icon-lib-grid button.on { border-color: var(--accent); }
+.icon-lib-grid img { width: 100%; height: 100%; display: block; }
 .icon-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(48px, 1fr)); gap: 6px; }
 .icon-grid button { padding: 4px; border-radius: 10px; background: var(--bg); border: 2px solid transparent; }
 .icon-grid button.on { border-color: var(--accent); }

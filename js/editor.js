@@ -3,6 +3,7 @@
 
 import { FONTS, FONT_CATEGORIES, labelDots, newElement, uid } from './model.js';
 import { loadFont } from './fonts.js';
+import { ICON_STYLES, iconURL, loadCatalog, fetchIconSVG } from './iconlib.js';
 import { prepare, draw, measureText, elementText, fitFontSize, fontCSS } from './render.js';
 import { ICONS, drawIcon } from './icons.js';
 import { recognizeText, dictate, canDictate, scanCode, canScanCodes, pickPhoto } from './capture.js';
@@ -472,7 +473,7 @@ export class Editor {
   update(changes, { commit = false } = {}) {
     const el = this.selected;
     Object.assign(el, changes);
-    prepare(this.doc).then(() => {
+    return prepare(this.doc).then(() => {
       this.fitBox(el);
       this.render();
       if (commit) this.commit();
@@ -627,7 +628,7 @@ export class Editor {
 
   field(el, f) {
     // Pickers made of many buttons can't sit inside a <label>: a tap on empty space would press the first button.
-    const wrap = document.createElement(['fonts', 'stylebar'].includes(f.kind) ? 'div' : 'label');
+    const wrap = document.createElement(['fonts', 'stylebar', 'icons'].includes(f.kind) ? 'div' : 'label');
     wrap.className = `field field-${f.kind}`;
     const name = document.createElement('span');
     name.textContent = f.label;
@@ -699,29 +700,9 @@ export class Editor {
       case 'fonts':
         input = this.fontPicker(el);
         break;
-      case 'icons': {
-        input = document.createElement('div');
-        input.className = 'icon-grid';
-        for (const name of Object.keys(ICONS)) {
-          const b = document.createElement('button');
-          b.type = 'button';
-          b.className = name === el.icon ? 'on' : '';
-          b.title = name;
-          const c = document.createElement('canvas');
-          c.width = c.height = 48;
-          const ctx = c.getContext('2d');
-          ctx.fillStyle = '#fff';
-          ctx.fillRect(0, 0, 48, 48);
-          drawIcon(ctx, name, 6, 6, 36, 36);
-          b.append(c);
-          b.onclick = () => {
-            this.update({ icon: name }, { commit: true });
-            this.renderInspector();
-          };
-          input.append(b);
-        }
+      case 'icons':
+        input = this.iconPicker(el);
         break;
-      }
     }
     // Text-like inputs commit to undo history when editing pauses.
     if (f.kind === 'text' || f.kind === 'textarea' || f.kind === 'number') input.onchange = () => this.commit();
@@ -772,6 +753,129 @@ export class Editor {
     b.setAttribute('aria-pressed', pressed);
     b.innerHTML = icon;
     return b;
+  }
+
+  // Icon picker: the classic built-in icons, then the Phosphor library with occasion
+  // collections, categories, search and a solid/outline choice.
+  iconPicker(el) {
+    const box = document.createElement('div');
+    box.className = 'icon-picker';
+    const choose = async (changes) => {
+      await this.update(changes, { commit: true });
+      this.renderInspector();
+    };
+
+    const classic = document.createElement('div');
+    classic.className = 'icon-grid';
+    for (const name of Object.keys(ICONS)) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.title = name;
+      b.className = !el.svg && name === el.icon ? 'on' : '';
+      const c = document.createElement('canvas');
+      c.width = c.height = 48;
+      const ctx = c.getContext('2d');
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(0, 0, 48, 48);
+      drawIcon(ctx, name, 6, 6, 36, 36);
+      b.append(c);
+      b.onclick = () => choose({ icon: name, svg: null, style: null });
+      classic.append(b);
+    }
+
+    const lib = document.createElement('div');
+    lib.className = 'icon-lib';
+    const controls = document.createElement('div');
+    controls.className = 'icon-lib-controls';
+    const collection = document.createElement('select');
+    collection.setAttribute('aria-label', 'Icon collection');
+    const search = document.createElement('input');
+    search.type = 'search';
+    search.placeholder = 'Search icons';
+    let style = el.style ?? 'fill';
+    const styles = document.createElement('div');
+    styles.className = 'segments icon-styles';
+    for (const [value, text] of ICON_STYLES) {
+      const b = this.iconButton(`${text} icons`, text, value === style);
+      b.dataset.style = value;
+      styles.append(b);
+    }
+    controls.append(collection, search, styles);
+    const grid = document.createElement('div');
+    grid.className = 'icon-lib-grid';
+    const status = document.createElement('p');
+    status.className = 'hint';
+    status.textContent = 'Loading icons…';
+    lib.append(controls, grid, status);
+
+    let cat;
+    const show = () => {
+      if (!cat) return;
+      const q = search.value.trim().toLowerCase();
+      let names;
+      // Match from the start of words, so "pets" doesn't find "petscii".
+      if (q) names = cat.icons.filter(([n, , tags]) => ` ${n.replace(/-/g, ' ')} ${tags}`.includes(` ${q}`)).map(([n]) => n);
+      else if (collection.value.startsWith('o:')) names = cat.occasions[collection.value.slice(2)];
+      else if (collection.value.startsWith('c:')) names = cat.icons.filter(([, c]) => c === Number(collection.value.slice(2))).map(([n]) => n);
+      else names = cat.icons.map(([n]) => n);
+      grid.replaceChildren(...names.map((n) => {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.title = n.replace(/-/g, ' ');
+        if (el.svg && el.icon === `ph:${n}` && el.style === style) b.className = 'on';
+        const img = document.createElement('img');
+        img.loading = 'lazy';
+        img.crossOrigin = 'anonymous'; // same request mode as fetchIconSVG, so the cached copy works for both
+        img.alt = '';
+        img.src = iconURL(n, style);
+        b.append(img);
+        b.onclick = async () => {
+          b.disabled = true;
+          try {
+            await choose({ icon: `ph:${n}`, style, svg: await fetchIconSVG(n, style) });
+          } catch (e) {
+            this.onMessage(e.message);
+            b.disabled = false;
+          }
+        };
+        return b;
+      }));
+      status.textContent = names.length ? `${names.length} icons` : 'No icons match';
+      grid.scrollTop = 0;
+    };
+
+    loadCatalog().then((c) => {
+      cat = c;
+      const group = (label, entries) => {
+        const g = document.createElement('optgroup');
+        g.label = label;
+        for (const [value, text] of entries) g.append(new Option(text, value));
+        collection.append(g);
+      };
+      group('Occasions', Object.keys(c.occasions).map((o) => [`o:${o}`, o]));
+      group('Categories', c.categories.map((t, i) => [`c:${i}`, t]));
+      collection.append(new Option(`All ${c.icons.length} icons`, 'all'));
+      show();
+    }, (e) => { status.textContent = e.message; });
+
+    collection.onchange = () => { search.value = ''; show(); };
+    search.oninput = show;
+    styles.addEventListener('click', async (e) => {
+      const b = e.target.closest('button');
+      if (!b) return;
+      style = b.dataset.style;
+      for (const other of styles.children) other.setAttribute('aria-pressed', other === b);
+      show();
+      // Switch the icon already on the label to the new style as well.
+      if (el.svg && el.icon?.startsWith('ph:') && el.style !== style) {
+        const n = el.icon.slice(3);
+        try { await choose({ style, svg: await fetchIconSVG(n, style) }); } catch (err) { this.onMessage(err.message); }
+      }
+    });
+
+    const title = (t) => Object.assign(document.createElement('h4'), { textContent: t, className: 'icon-heading' });
+    box.append(title('Classic'), classic, title('Icon library'), lib);
+    return box;
   }
 
   // Font picker: the current font as a button that opens a searchable list, each name shown in its own font.

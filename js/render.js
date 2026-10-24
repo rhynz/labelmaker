@@ -13,6 +13,11 @@ export async function prepare(doc) {
   const jobs = [];
   for (const el of doc.elements) {
     if (el.font) jobs.push(loadFont(el.font).then(() => document.fonts.load(`${el.bold ? 800 : 400} 40px ${el.font}`)).catch(() => {}));
+    if (el.type === 'icon' && el.svg && !images.has(svgSrc(el.svg))) {
+      const img = new Image();
+      images.set(svgSrc(el.svg), img);
+      jobs.push(new Promise((res) => { img.onload = img.onerror = res; img.src = svgSrc(el.svg); }));
+    }
     if (el.type === 'image' && el.src && !images.has(el.src)) {
       const img = new Image();
       images.set(el.src, img);
@@ -20,6 +25,17 @@ export async function prepare(doc) {
     }
   }
   await Promise.all(jobs);
+}
+
+const svgSrc = (svg) => `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+
+// Library icons carry their own SVG; the classic ones are drawn from icons.js.
+function drawIconElement(ctx, el) {
+  if (!el.svg) return drawIcon(ctx, el.icon, el.x, el.y, el.w, el.h);
+  const img = images.get(svgSrc(el.svg));
+  if (!img?.naturalWidth) return;
+  const s = Math.min(el.w, el.h);
+  ctx.drawImage(img, el.x + (el.w - s) / 2, el.y + (el.h - s) / 2, s, s);
 }
 
 export function formatDate(el, now = new Date()) {
@@ -241,7 +257,7 @@ export function drawElement(ctx, el) {
     case 'barcode': drawBarcode(ctx, el); break;
     case 'qr': drawQR(ctx, el); break;
     case 'image': drawImage(ctx, el); break;
-    case 'icon': drawIcon(ctx, el.icon, el.x, el.y, el.w, el.h); break;
+    case 'icon': drawIconElement(ctx, el); break;
   }
   ctx.restore();
 }
