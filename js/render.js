@@ -56,63 +56,157 @@ export function formatDate(el, now = new Date()) {
 export const elementText = (el) => (el.type === 'date' ? formatDate(el) : el.text);
 
 export const fontCSS = (el, size) => `${el.italic ? 'italic ' : ''}${el.bold ? 800 : 400} ${size}px ${el.font}`;
-const lineCount = (text) => text.split('\n').length;
 
 let measureCtx;
-function widestLine(el, text, size) {
+
+// ---- text layout ----
+// Text is laid out as glyphs (whole lines for straight text, single letters otherwise), each
+// with a centre, an angle and a vertical stretch. A shape (arch, wave…) bends that layout and
+// rotate turns it as a whole; the box the text needs is the bounding box of every glyph.
+export const TEXT_SHAPES = ['none', 'arch', 'arch-down', 'circle', 'wave', 'bulge', 'pinch', 'vertical'];
+export const isStraightText = (el) => (el.warp ?? 'none') === 'none' && !el.rotate;
+
+function layoutText(el, text, size) {
   measureCtx ??= document.createElement('canvas').getContext('2d');
-  measureCtx.font = fontCSS(el, size);
-  if ('letterSpacing' in measureCtx) measureCtx.letterSpacing = `${el.letterSpacing}px`;
-  return Math.max(...text.split('\n').map((l) => measureCtx.measureText(l).width));
+  const ctx = measureCtx;
+  ctx.font = fontCSS(el, size);
+  const spaced = 'letterSpacing' in ctx;
+  const warp = el.warp ?? 'none';
+  const lines = text.split('\n');
+  const n = lines.length;
+  const lineH = size * el.lineSpacing;
+  const glyphs = [];
+  const charW = (ch) => ctx.measureText(ch).width + el.letterSpacing;
+  if (spaced) ctx.letterSpacing = '0px';
+
+  if (warp === 'none') {
+    if (spaced) ctx.letterSpacing = `${el.letterSpacing}px`;
+    const widths = lines.map((l) => ctx.measureText(l).width);
+    const W = Math.max(...widths);
+    lines.forEach((line, i) => {
+      const start = el.align === 'left' ? -W / 2 : el.align === 'right' ? W / 2 - widths[i] : -widths[i] / 2;
+      glyphs.push({ text: line, x: start + widths[i] / 2, y: (i - (n - 1) / 2) * lineH, a: 0, sy: 1, w: widths[i], spaced: true });
+    });
+  } else if (warp === 'vertical') {
+    // Letters stacked top to bottom; each line becomes a column. Align moves them up or down.
+    const step = size * 0.92 + el.letterSpacing;
+    const most = Math.max(...lines.map((l) => [...l].length));
+    lines.forEach((line, i) => {
+      const chars = [...line];
+      const off = el.align === 'left' ? 0 : el.align === 'right' ? most - chars.length : (most - chars.length) / 2;
+      chars.forEach((ch, j) => glyphs.push({ text: ch, x: (i - (n - 1) / 2) * lineH, y: (off + j - (most - 1) / 2) * step, a: 0, sy: 1, w: charW(ch), h: step }));
+    });
+  } else {
+    const widths = lines.map((l) => [...l].reduce((sum, ch) => sum + charW(ch), 0));
+    const W = Math.max(1, ...widths);
+    const c = (el.curve ?? 50) / 100;
+    // Arches: the widest line bends through up to 324° (a full circle for "circle").
+    const sweep = warp === 'circle' ? Math.PI * 2 * 0.94 : Math.max(0.05, c * Math.PI * 1.8);
+    const R = W / sweep;
+    lines.forEach((line, i) => {
+      const y = (i - (n - 1) / 2) * lineH;
+      let x = el.align === 'left' ? -W / 2 : el.align === 'right' ? W / 2 - widths[i] : -widths[i] / 2;
+      for (const ch of line) {
+        const w = charW(ch), cx = x + w / 2;
+        x += w;
+        if (warp === 'arch' || warp === 'circle') {
+          const r = R - y, f = cx / r;
+          glyphs.push({ text: ch, x: r * Math.sin(f), y: R - r * Math.cos(f), a: f, sy: 1, w });
+        } else if (warp === 'arch-down') {
+          const r = R + y, f = cx / r;
+          glyphs.push({ text: ch, x: r * Math.sin(f), y: r * Math.cos(f) - R, a: -f, sy: 1, w });
+        } else if (warp === 'wave') {
+          const A = c * size * 0.6, k = (Math.PI * 2 * 1.5) / W;
+          glyphs.push({ text: ch, x: cx, y: y + A * Math.sin(k * cx), a: Math.atan(A * k * Math.cos(k * cx)), sy: 1, w });
+        } else {
+          const t = Math.cos((Math.PI * cx) / W); // 1 in the middle, 0 at the ends
+          const sy = warp === 'bulge' ? 1 + 1.6 * c * t : 1 + 1.6 * c * (1 - t);
+          glyphs.push({ text: ch, x: cx, y, a: 0, sy, w });
+        }
+      }
+    });
+  }
+
+  // Bounding box after turning the whole text by el.rotate.
+  const rot = ((el.rotate ?? 0) * Math.PI) / 180;
+  const cos = Math.cos(rot), sin = Math.sin(rot);
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  for (const g of glyphs) {
+    const hw = g.w / 2, hh = ((g.h ?? size) * g.sy) / 2;
+    const ca = Math.cos(g.a), sa = Math.sin(g.a);
+    for (const [px, py] of [[-hw, -hh], [hw, -hh], [hw, hh], [-hw, hh]]) {
+      const gx = g.x + px * ca - py * sa, gy = g.y + px * sa + py * ca;
+      const X = gx * cos - gy * sin, Y = gx * sin + gy * cos;
+      minX = Math.min(minX, X); maxX = Math.max(maxX, X);
+      minY = Math.min(minY, Y); maxY = Math.max(maxY, Y);
+    }
+  }
+  if (!glyphs.length) minX = maxX = minY = maxY = 0;
+  if (spaced) ctx.letterSpacing = '0px';
+  return { glyphs, size, rot, minX, maxX, minY, maxY, w: maxX - minX, h: maxY - minY };
 }
 
 // The box a text element needs to show its text at full font size.
 export function measureText(el, text) {
   const pad = el.reverse ? 4 : 0;
-  return {
-    w: Math.ceil(widestLine(el, text, el.size) + pad * 2 + 4),
-    h: Math.ceil(el.size * (1 + el.lineSpacing * (lineCount(text) - 1)) + pad * 2 + 2),
-  };
+  const L = layoutText(el, text, el.size);
+  return { w: Math.ceil(L.w + pad * 2 + 4), h: Math.ceil(L.h + pad * 2 + 2) };
 }
 
-// Largest font size (up to el.size) at which the text fits its box.
-export function fitFontSize(el, text) {
+// The layout at the largest font size (up to el.size) at which the text fits its box.
+function fitLayout(el, text) {
   const pad = el.reverse ? 4 : 0;
-  let size = el.size;
-  for (; size > 6; size--) {
-    if (widestLine(el, text, size) <= el.w - pad * 2 && size * (1 + el.lineSpacing * (lineCount(text) - 1)) <= el.h - pad * 2) break;
+  const fits = (L) => L.w <= el.w - pad * 2 && L.h <= el.h - pad * 2;
+  let L = layoutText(el, text, el.size);
+  if (fits(L) || el.size <= 6) return L;
+  // Text grows roughly in proportion to its size, so start from the estimate and adjust.
+  let size = Math.max(6, Math.min(el.size - 1, Math.floor(el.size * Math.min((el.w - pad * 2) / L.w, (el.h - pad * 2) / L.h))));
+  L = layoutText(el, text, size);
+  while (size > 6 && !fits(L)) L = layoutText(el, text, --size);
+  while (size < el.size - 1 && fits(L)) {
+    const bigger = layoutText(el, text, size + 1);
+    if (!fits(bigger)) break;
+    L = bigger;
+    size++;
   }
-  return size;
+  return L;
 }
+
+export const fitFontSize = (el, text) => fitLayout(el, text).size;
 
 function drawText(ctx, el, text) {
-  const lines = text.split('\n');
   const pad = el.reverse ? 4 : 0;
-  const boxW = el.w - pad * 2;
-
   if (el.reverse) {
     ctx.fillStyle = '#000';
     ctx.beginPath();
     ctx.roundRect(el.x, el.y, el.w, el.h, 4);
     ctx.fill();
   }
+  const L = fitLayout(el, text);
+  const size = L.size;
   ctx.fillStyle = el.reverse ? '#fff' : '#000';
   ctx.textBaseline = 'middle';
-  if ('letterSpacing' in ctx) ctx.letterSpacing = `${el.letterSpacing}px`;
-  const size = fitFontSize(el, text);
   ctx.font = fontCSS(el, size);
 
-  const lineH = size * el.lineSpacing;
-  const cy = el.y + el.h / 2;
-  lines.forEach((line, i) => {
-    const y = cy + (i - (lines.length - 1) / 2) * lineH;
-    const width = ctx.measureText(line).width;
-    let x = el.x + pad;
-    if (el.align === 'center') x += (boxW - width) / 2;
-    else if (el.align === 'right') x += boxW - width;
-    ctx.fillText(line, x, y);
-    if (el.underline) ctx.fillRect(x, y + size * 0.45, width, Math.max(2, size / 14));
-  });
+  // Place the text's bounding box in the element box: centred, or against the side it is aligned to.
+  let ox = el.x + el.w / 2 - (L.minX + L.maxX) / 2;
+  if ((el.warp ?? 'none') !== 'vertical') {
+    if (el.align === 'left') ox = el.x + pad - L.minX;
+    else if (el.align === 'right') ox = el.x + el.w - pad - L.maxX;
+  }
+  const oy = el.y + el.h / 2 - (L.minY + L.maxY) / 2;
+  for (const g of L.glyphs) {
+    ctx.save();
+    ctx.translate(ox, oy);
+    ctx.rotate(L.rot);
+    ctx.translate(g.x, g.y);
+    ctx.rotate(g.a);
+    if (g.sy !== 1) ctx.scale(1, g.sy);
+    if ('letterSpacing' in ctx) ctx.letterSpacing = g.spaced ? `${el.letterSpacing}px` : '0px';
+    ctx.fillText(g.text, -g.w / 2 + (g.spaced ? 0 : el.letterSpacing / 2), 0);
+    if (el.underline) ctx.fillRect(-g.w / 2, size * 0.45, g.w, Math.max(2, size / 14));
+    ctx.restore();
+  }
   if ('letterSpacing' in ctx) ctx.letterSpacing = '0px';
 }
 

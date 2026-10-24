@@ -5,7 +5,7 @@ import { DPM, FONTS, FONT_CATEGORIES, labelDots, newElement, store, uid } from '
 import { loadFont } from './fonts.js';
 import { ICON_STYLES, iconURL, loadCatalog, fetchIconSVG } from './iconlib.js';
 import { BORDER_CATEGORIES, borderDesign, bordersIn } from './borders.js';
-import { prepare, draw, drawElement, measureText, elementText, fitFontSize, fontCSS } from './render.js';
+import { prepare, draw, drawElement, measureText, elementText, fitFontSize, fontCSS, isStraightText } from './render.js';
 import { ICONS, drawIcon } from './icons.js';
 import { recognizeText, dictate, canDictate, scanCode, canScanCodes, pickPhoto } from './capture.js';
 
@@ -15,6 +15,15 @@ const MIN = 6; // smallest element size, dots
 
 // Icons for the element action buttons (20×20, drawn in the current text colour).
 const svg = (body) => `<svg viewBox="0 0 20 20" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${body}</svg>`;
+const TEXT_SHAPE_NAMES = [
+  ['none', 'Straight'], ['arch', 'Arch up'], ['arch-down', 'Arch down'], ['circle', 'Circle'],
+  ['wave', 'Wave'], ['bulge', 'Bulge'], ['pinch', 'Pinch'], ['vertical', 'Stacked'],
+];
+const ROTATE_ICONS = {
+  left: '<svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9a6 6 0 1 1 2 5"/><path d="M4 4v5h5"/></svg>',
+  right: '<svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 9a6 6 0 1 0-2 5"/><path d="M16 4v5h-5"/></svg>',
+};
+
 const ACTION_ICONS = {
   left: svg('<line x1="2.5" y1="2" x2="2.5" y2="18"/><rect x="5.5" y="6" width="11" height="8" rx="1.5"/>'),
   centerH: svg('<line x1="10" y1="2" x2="10" y2="18" stroke-dasharray="2 2"/><rect x="4.5" y="6" width="11" height="8" rx="1.5"/>'),
@@ -55,6 +64,9 @@ const TEXT_STYLE = [
     ],
     align: ['left', 'center', 'right'].map((v) => [v, `Align ${v}`, alignIcon(v)]),
   },
+  { key: 'warp', label: 'Text shape', kind: 'shapes' },
+  { key: 'curve', label: 'Curve', kind: 'slider', min: 5, max: 100, format: (v) => `${v}%`, when: (el) => ['arch', 'arch-down', 'wave', 'bulge', 'pinch'].includes(el.warp) },
+  { key: 'rotate', label: 'Rotate', kind: 'rotation' },
   { key: 'letterSpacing', label: 'Letter spacing', kind: 'slider', min: -5, max: 20 },
   { key: 'lineSpacing', label: 'Line spacing', kind: 'slider', min: 0.6, max: 2, step: 0.05, format: (v) => `${v.toFixed(2)}×` },
 ];
@@ -240,11 +252,23 @@ export class Editor {
   placeTyper() {
     const el = this.editing;
     if (!el) return;
+    const t = this.typer.style;
+    this.typer.classList.toggle('floating', !isStraightText(el));
+    if (!isStraightText(el)) {
+      // Curved, stacked or turned text can't be edited in place: type in a box just under the label.
+      const lines = el.text.split('\n').length;
+      Object.assign(t, {
+        left: `${this.stage.offsetLeft}px`, top: `${this.stage.offsetTop + this.stage.clientHeight + 6}px`,
+        width: `${Math.max(150, this.stage.clientWidth - 130)}px`, height: `${lines * 22 + 12}px`,
+        font: '16px -apple-system, system-ui, sans-serif', lineHeight: '22px', letterSpacing: '0px',
+        textAlign: 'left', textDecoration: 'none', padding: '6px 10px', color: '#000', background: '#fff',
+      });
+      return;
+    }
     const k = this.stage.clientWidth / labelDots(this.doc).w; // screen px per dot
     const size = fitFontSize(el, el.text) * k;
     const lines = el.text.split('\n').length;
     const pad = (el.reverse ? 4 : 0) * k;
-    const t = this.typer.style;
     t.left = `${this.stage.offsetLeft + el.x * k}px`;
     t.top = `${this.stage.offsetTop + el.y * k}px`;
     t.width = `${el.w * k}px`;
@@ -321,7 +345,8 @@ export class Editor {
 
   render() {
     const { w, h } = labelDots(this.doc);
-    draw(this.label, this.doc, { skip: this.editingId });
+    // Straight text is typed in place; shaped text stays drawn so the shape updates as you type.
+    draw(this.label, this.doc, { skip: this.editing && isStraightText(this.editing) ? this.editingId : null });
     // Show the label exactly as the printer will: hard black and white.
     const lctx = this.label.getContext('2d');
     const img = lctx.getImageData(0, 0, w, h);
@@ -768,13 +793,13 @@ export class Editor {
 
     const grid = document.createElement('div');
     grid.className = 'fields';
-    for (const f of FIELDS[el.type]) grid.append(this.field(el, f));
+    for (const f of FIELDS[el.type]) if (!f.when || f.when(el)) grid.append(this.field(el, f));
     box.append(grid);
   }
 
   field(el, f) {
     // Pickers made of many buttons can't sit inside a <label>: a tap on empty space would press the first button.
-    const wrap = document.createElement(['fonts', 'stylebar', 'icons', 'borders'].includes(f.kind) ? 'div' : 'label');
+    const wrap = document.createElement(['fonts', 'stylebar', 'icons', 'borders', 'shapes', 'rotation'].includes(f.kind) ? 'div' : 'label');
     wrap.className = `field field-${f.kind}`;
     const name = document.createElement('span');
     name.textContent = f.label;
@@ -800,10 +825,10 @@ export class Editor {
         // The label redraws while dragging; the change goes into undo history on release.
         const range = document.createElement('input');
         range.type = 'range';
-        Object.assign(range, { min: f.min, max: f.max, step: f.step ?? 1, value: el[f.key] });
+        Object.assign(range, { min: f.min, max: f.max, step: f.step ?? 1, value: el[f.key] ?? f.min });
         const out = document.createElement('output');
         const show = (v) => { out.textContent = f.format ? f.format(v) : v; };
-        show(el[f.key]);
+        show(Number(range.value));
         range.oninput = () => {
           show(Number(range.value));
           this.update({ [f.key]: Number(range.value) });
@@ -854,6 +879,12 @@ export class Editor {
         break;
       case 'borders':
         input = this.borderPicker(el);
+        break;
+      case 'shapes':
+        input = this.shapePicker(el);
+        break;
+      case 'rotation':
+        input = this.rotationControl(el);
         break;
     }
     // Text-like inputs commit to undo history when editing pauses.
@@ -909,6 +940,82 @@ export class Editor {
 
   // Icon picker: the classic built-in icons, then the Phosphor library with occasion
   // collections, categories, search and a solid/outline choice.
+  // Text shapes, each previewed with this element's own text.
+  shapePicker(el) {
+    const grid = document.createElement('div');
+    grid.className = 'shape-grid';
+    const sample = (elementText(el) || 'Text').split('\n')[0].slice(0, 14) || 'Text';
+    const current = el.warp ?? 'none';
+    for (const [value, name] of TEXT_SHAPE_NAMES) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = value === current ? 'on' : '';
+      const c = document.createElement('canvas');
+      c.width = 180;
+      c.height = value === 'vertical' || value === 'circle' ? 120 : 80;
+      const ctx = c.getContext('2d');
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(0, 0, c.width, c.height);
+      const text = value === 'vertical' ? sample.slice(0, 5) : sample;
+      drawElement(ctx, {
+        ...el, type: 'text', text, x: 6, y: 6, w: c.width - 12, h: c.height - 12, size: 72,
+        warp: value, curve: el.curve ?? 50, rotate: 0, reverse: false, underline: false, align: 'center',
+      });
+      const label = document.createElement('span');
+      label.textContent = name;
+      b.append(c, label);
+      b.onclick = async () => {
+        await this.update({ warp: value, curve: el.curve ?? 50 }, { commit: true });
+        this.renderInspector();
+      };
+      grid.append(b);
+    }
+    return grid;
+  }
+
+  // Free rotation slider, with quick buttons to turn a quarter either way or straighten.
+  rotationControl(el) {
+    const box = document.createElement('div');
+    box.className = 'rotation';
+    const range = document.createElement('input');
+    range.type = 'range';
+    Object.assign(range, { min: -180, max: 180, step: 1, value: el.rotate ?? 0 });
+    range.setAttribute('aria-label', 'Rotation');
+    const out = document.createElement('output');
+    const show = () => { out.textContent = `${range.value}°`; };
+    show();
+    // Snap to 0 and the quarter turns when close, so straight and sideways are easy to hit.
+    const value = () => {
+      const v = Number(range.value);
+      const near = [-180, -90, 0, 90, 180].find((q) => Math.abs(v - q) <= 3);
+      return near ?? v;
+    };
+    range.oninput = () => { range.value = value(); show(); this.update({ rotate: value() }); };
+    range.onchange = () => this.update({ rotate: value() }, { commit: true });
+    const set = (deg) => {
+      const v = ((((deg + 180) % 360) + 360) % 360) - 180;
+      range.value = v;
+      show();
+      this.update({ rotate: v }, { commit: true });
+    };
+    const buttons = document.createElement('div');
+    buttons.className = 'segments';
+    for (const [title, icon, fn] of [
+      ['Turn left 90°', ROTATE_ICONS.left, () => set(Number(range.value) - 90)],
+      ['Straighten', '0°', () => set(0)],
+      ['Turn right 90°', ROTATE_ICONS.right, () => set(Number(range.value) + 90)],
+    ]) {
+      const b = this.iconButton(title, icon, false);
+      b.onclick = fn;
+      buttons.append(b);
+    }
+    const slider = document.createElement('div');
+    slider.className = 'slider';
+    slider.append(range, out);
+    box.append(buttons, slider);
+    return box;
+  }
+
   // Border designs in tabs, each shown as a small preview at this border's size and thickness.
   borderPicker(el) {
     const box = document.createElement('div');
