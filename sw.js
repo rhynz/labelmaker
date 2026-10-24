@@ -4,10 +4,10 @@
 // given URL, so they come from the cache first.
 // Bump VERSION when files are added or removed from SHELL.
 
-const VERSION = 'v3';
+const VERSION = 'v4';
 const CACHE = `labelmaker-${VERSION}`;
 const SHELL = [
-  './', 'index.html', 'test.html', 'manifest.webmanifest', 'css/app.css',
+  './', 'index.html', 'test.html', 'manifest.webmanifest', 'version.json', 'css/app.css',
   'js/app.js', 'js/batch.js', 'js/capture.js', 'js/editor.js', 'js/fonts.js', 'js/icons.js', 'js/model.js',
   'js/printer.js', 'js/raster.js', 'js/render.js', 'js/test.js',
   'vendor/JsBarcode.all.min.js', 'vendor/qrcode.js',

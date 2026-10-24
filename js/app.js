@@ -5,8 +5,9 @@ import { renderToCanvas, thumbnail } from './render.js';
 import { Editor, ADD_TYPES, readImageFile } from './editor.js';
 import { parseCSV, readDataFile, fillDoc, placeholders, missingColumns } from './batch.js';
 
-// Shown on the print screen so it's easy to tell whether a device has picked up an update. Bump on every push.
-const BUILD = 23;
+// Shown on the print screen so it's easy to tell whether a device has picked up an update.
+// Set by the loader in index.html from version.json; bump "build" there on every push.
+const BUILD = window.APP_BUILD;
 const $ = (sel) => document.querySelector(sel);
 // Printer messages are kept for the log on the print screen (there's no console on iPhone).
 const printerLog = [];

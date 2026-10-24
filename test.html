@@ -113,6 +113,32 @@
     <pre id="log"></pre>
   </section>
 </main>
-<script type="module" src="js/test.js"></script>
+<script>
+  // Always load the newest version. GitHub Pages lets browsers reuse files for 10 minutes and
+  // iPhone browsers may ignore the service worker, so version.json is fetched fresh and every
+  // file is requested as ?v=<build>, a URL the browser can't have cached from an older build.
+  (async () => {
+    const ENTRY = 'test', CSS = null;
+    const MODULES = ['app', 'batch', 'capture', 'editor', 'fonts', 'icons', 'model', 'printer', 'raster', 'render', 'test'];
+    let build = null;
+    try { build = (await (await fetch('version.json', { cache: 'no-store' })).json()).build; } catch {} // offline: use what we have
+    const params = new URLSearchParams(location.search);
+    if (build && !(Number(params.get('v')) >= build)) { // only ever move forward, never back to an older build
+      params.set('v', build); // reload this page at the new version's address, so the page itself is fresh too
+      return location.replace(`${location.pathname}?${params}${location.hash}`);
+    }
+    window.APP_BUILD = build ?? params.get('v') ?? '?';
+    const v = `?v=${window.APP_BUILD}`;
+    const url = (path) => new URL(path, location.href).href;
+    const map = { imports: Object.fromEntries(MODULES.map((m) => [url(`js/${m}.js`), url(`js/${m}.js${v}`)])) };
+    document.head.append(Object.assign(document.createElement('script'), { type: 'importmap', textContent: JSON.stringify(map) }));
+    if (CSS) {
+      const link = Object.assign(document.createElement('link'), { rel: 'stylesheet', href: `${CSS}${v}` });
+      link.onload = link.onerror = () => document.documentElement.classList.remove('booting');
+      document.head.append(link);
+    }
+    import(`./js/${ENTRY}.js${v}`);
+  })();
+</script>
 </body>
 </html>
