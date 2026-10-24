@@ -595,9 +595,9 @@ export class Editor {
       [['duplicate', 'Duplicate', () => this.duplicate()],
         ['delete', 'Delete', () => this.remove()]],
     ];
-    for (const group of groups) {
-      const g = document.createElement('div');
-      g.className = 'action-group';
+    // One row: buttons share the width equally, with thin dividers between groups.
+    for (const [i, group] of groups.entries()) {
+      if (i) actions.append(Object.assign(document.createElement('span'), { className: 'action-sep' }));
       for (const [icon, title, fn] of group) {
         const b = document.createElement('button');
         b.type = 'button';
@@ -606,9 +606,8 @@ export class Editor {
         b.innerHTML = ACTION_ICONS[icon];
         b.onclick = fn;
         if (icon === 'delete') b.classList.add('danger');
-        g.append(b);
+        actions.append(b);
       }
-      actions.append(g);
     }
     box.append(actions);
 
