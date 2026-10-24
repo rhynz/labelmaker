@@ -1,9 +1,10 @@
-// Offline support: the app shell is cached on install, and every request is
-// answered from the cache first while a fresh copy is fetched in the background
-// (stale-while-revalidate), so updates show up on the next launch.
+// Offline support. The app's own files are fetched from the network first (so an
+// update shows up on the next launch) and served from the cache when offline or
+// when the network is too slow. Fonts and libraries from CDNs never change at a
+// given URL, so they come from the cache first.
 // Bump VERSION when files are added or removed from SHELL.
 
-const VERSION = 'v2';
+const VERSION = 'v3';
 const CACHE = `labelmaker-${VERSION}`;
 const SHELL = [
   './', 'index.html', 'test.html', 'manifest.webmanifest', 'css/app.css',
@@ -33,17 +34,17 @@ self.addEventListener('fetch', (e) => {
   if (url.origin !== location.origin && !CDN_HOSTS.includes(url.hostname)) return;
 
   e.respondWith(caches.open(CACHE).then(async (cache) => {
-    const cached = await cache.match(e.request, { ignoreSearch: url.origin === location.origin });
-    const fresh = fetch(e.request)
-      .then((res) => {
-        if (res.ok || res.type === 'opaque') cache.put(e.request, res.clone());
-        return res;
-      })
-      .catch(() => cached);
-    if (cached) {
-      e.waitUntil(fresh);
-      return cached;
-    }
-    return fresh;
+    const own = url.origin === location.origin;
+    const cached = await cache.match(e.request, { ignoreSearch: own });
+    // 'no-cache' revalidates with the server instead of trusting the browser's 10-minute HTTP cache.
+    const fresh = fetch(e.request, own ? { cache: 'no-cache' } : {}).then((res) => {
+      if (res.ok || res.type === 'opaque') cache.put(e.request, res.clone());
+      return res;
+    });
+    if (!own) return cached ?? fresh;
+    if (!cached) return fresh;
+    // Network first, but don't keep a slow connection waiting: fall back to the cache after 3 s.
+    const slow = new Promise((resolve) => setTimeout(() => resolve(cached), 3000));
+    return Promise.race([fresh.catch(() => cached), slow]);
   }));
 });

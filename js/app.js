@@ -6,7 +6,7 @@ import { Editor, ADD_TYPES, readImageFile } from './editor.js';
 import { parseCSV, readDataFile, fillDoc, placeholders, missingColumns } from './batch.js';
 
 // Shown on the print screen so it's easy to tell whether a device has picked up an update. Bump on every push.
-const BUILD = 21;
+const BUILD = 22;
 const $ = (sel) => document.querySelector(sel);
 // Printer messages are kept for the log on the print screen (there's no console on iPhone).
 const printerLog = [];
@@ -147,13 +147,14 @@ async function openEditor(doc, fromHistory = false) {
   updateEditorBar();
 }
 
-function closeEditor() {
+async function closeEditor() {
   if (editor.dirty && editor.doc.elements.length) {
     const choice = confirm('Save changes to this label before leaving?');
-    if (choice) saveLabel();
+    if (choice) await saveLabel(); // finish saving before the home list (or an update reload) reads it
   }
   $('#editor').hidden = true;
   $('#home').hidden = false;
+  if (updateReady) return location.reload();
   renderHome();
 }
 
@@ -427,6 +428,17 @@ updatePrinterPill();
 renderHome();
 // Offline support. Service workers need https or localhost; some in-app browsers don't offer them.
 navigator.serviceWorker?.register('sw.js').catch((e) => console.warn('Offline mode unavailable:', e.message));
+
+// When a new version takes over, reload so it's used straight away. Not in the middle
+// of editing, though: then it waits until you leave the label.
+let updateReady = false;
+const hadController = !!navigator.serviceWorker?.controller; // false on the very first visit
+navigator.serviceWorker?.addEventListener('controllerchange', () => {
+  if (!hadController || updateReady) return;
+  updateReady = true;
+  if ($('#editor').hidden) location.reload();
+  else toast('An update is ready. It loads when you leave this label.', 4000);
+});
 
 // #demo opens a label using every element type (handy for checking rendering).
 if (location.hash === '#demo') {
