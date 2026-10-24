@@ -6,7 +6,7 @@ import { Editor, ADD_TYPES, readImageFile } from './editor.js';
 import { parseCSV, readDataFile, fillDoc, placeholders, missingColumns } from './batch.js';
 
 // Shown on the print screen so it's easy to tell whether a device has picked up an update. Bump on every push.
-const BUILD = 19;
+const BUILD = 20;
 const $ = (sel) => document.querySelector(sel);
 // Printer messages are kept for the log on the print screen (there's no console on iPhone).
 const printerLog = [];

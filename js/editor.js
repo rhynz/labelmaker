@@ -39,10 +39,14 @@ const TEXT_STYLE = [
   { key: 'auto', label: 'Fit box to text', kind: 'check' },
   { key: 'font', label: 'Font', kind: 'fonts' },
   { key: 'size', label: 'Font size', kind: 'slider', min: 6, max: 96 },
-  { key: 'bold', label: 'Bold', kind: 'check' },
-  { key: 'italic', label: 'Italic', kind: 'check' },
-  { key: 'underline', label: 'Underline', kind: 'check' },
-  { key: 'reverse', label: 'Reverse (white on black)', kind: 'check' },
+  {
+    key: 'style', label: 'Style', kind: 'toggles', options: [
+      ['bold', 'Bold', '<b>B</b>'],
+      ['italic', 'Italic', '<i class="serif">I</i>'],
+      ['underline', 'Underline', '<u>U</u>'],
+      ['reverse', 'Reverse (white on black)', '<span class="rev">A</span>'],
+    ],
+  },
   { key: 'align', label: 'Align', kind: 'segments', options: ['left', 'center', 'right'].map((v) => [v, `Align ${v}`, alignIcon(v)]) },
   { key: 'letterSpacing', label: 'Letter spacing', kind: 'slider', min: -5, max: 20 },
   { key: 'lineSpacing', label: 'Line spacing', kind: 'slider', min: 0.6, max: 2, step: 0.05, format: (v) => `${v.toFixed(2)}×` },
@@ -619,7 +623,7 @@ export class Editor {
 
   field(el, f) {
     // Pickers made of many buttons can't sit inside a <label>: a tap on empty space would press the first button.
-    const wrap = document.createElement(f.kind === 'fonts' || f.kind === 'segments' ? 'div' : 'label');
+    const wrap = document.createElement(['fonts', 'segments', 'toggles'].includes(f.kind) ? 'div' : 'label');
     wrap.className = `field field-${f.kind}`;
     const name = document.createElement('span');
     name.textContent = f.label;
@@ -686,6 +690,25 @@ export class Editor {
           b.onclick = () => {
             this.update({ [f.key]: value }, { commit: true });
             for (const other of input.children) other.setAttribute('aria-pressed', other === b);
+          };
+          input.append(b);
+        }
+        break;
+      case 'toggles':
+        // On/off icon buttons, each switching its own setting (e.g. bold, italic).
+        input = document.createElement('div');
+        input.className = 'segments toggles';
+        for (const [key, title, icon] of f.options) {
+          const b = document.createElement('button');
+          b.type = 'button';
+          b.title = title;
+          b.setAttribute('aria-label', title);
+          b.setAttribute('aria-pressed', !!el[key]);
+          b.innerHTML = icon;
+          b.onclick = () => {
+            const on = !el[key];
+            this.update({ [key]: on }, { commit: true });
+            b.setAttribute('aria-pressed', on);
           };
           input.append(b);
         }

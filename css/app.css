@@ -101,6 +101,10 @@ input, select, textarea {
 .segments { display: inline-flex; gap: 2px; padding: 2px; background: var(--bg); border: 1px solid var(--line); border-radius: 10px; justify-self: start; }
 .segments button { padding: 6px 14px; border-radius: 8px; background: transparent; color: var(--muted); line-height: 0; }
 .segments button[aria-pressed=true] { background: var(--card); color: var(--accent); box-shadow: 0 1px 3px rgba(0, 0, 0, .15); }
+.toggles button { min-width: 36px; padding: 5px 8px; line-height: 1; font-size: 17px; }
+.toggles .serif { font-family: Georgia, serif; }
+.toggles .rev { display: inline-block; padding: 0 4px; border-radius: 3px; background: currentColor; }
+.toggles .rev::first-letter { color: var(--card); }
 .slider { display: flex; align-items: center; gap: 12px; }
 .slider input[type=range] { flex: 1; min-width: 0; height: 28px; padding: 0; border: 0; background: none; accent-color: var(--accent); }
 .slider output { min-width: 2.5em; text-align: right; font-size: 15px; color: var(--text); font-variant-numeric: tabular-nums; }
