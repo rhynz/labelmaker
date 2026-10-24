@@ -102,6 +102,7 @@ input, select, textarea {
 .segments button { padding: 6px 14px; border-radius: 8px; background: transparent; color: var(--muted); line-height: 0; }
 .segments button[aria-pressed=true] { background: var(--card); color: var(--accent); box-shadow: 0 1px 3px rgba(0, 0, 0, .15); }
 .toggles button { min-width: 36px; padding: 5px 8px; line-height: 1; font-size: 17px; }
+.toggles svg { display: block; width: 18px; height: 18px; margin: auto; }
 .toggles .serif { font-family: Georgia, serif; }
 .toggles .rev { display: inline-block; padding: 0 4px; border-radius: 3px; background: currentColor; }
 .toggles .rev::first-letter { color: var(--card); }

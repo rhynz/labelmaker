@@ -23,6 +23,8 @@ const ACTION_ICONS = {
   front: svg('<rect x="2.5" y="2.5" width="10" height="10" rx="1.5" stroke-dasharray="2 2"/><rect x="7.5" y="7.5" width="10" height="10" rx="1.5" fill="currentColor"/>'),
   back: svg('<rect x="2.5" y="2.5" width="10" height="10" rx="1.5" fill="currentColor"/><rect x="7.5" y="7.5" width="10" height="10" rx="1.5" fill="var(--card)"/>'),
   duplicate: svg('<rect x="6.5" y="6.5" width="11" height="11" rx="1.5"/><path d="M13.5 6.5V4a1.5 1.5 0 0 0-1.5-1.5H4A1.5 1.5 0 0 0 2.5 4v8A1.5 1.5 0 0 0 4 13.5h2.5"/>'),
+  // A "T" with a box tight around it: the text box hugs its text.
+  fitText: svg('<path d="M2.5 6V2.5H6M14 2.5h3.5V6M17.5 14v3.5H14M6 17.5H2.5V14"/><path d="M6.5 6.5h7M10 6.5v7.5" stroke-width="2.2"/>'),
   delete: svg('<path d="M3 5h14M8 5V3h4v2M5 5l1 12h8l1-12M8.5 8.5v6M11.5 8.5v6"/>'),
 };
 
@@ -36,7 +38,7 @@ function alignIcon(side) {
 }
 
 const TEXT_STYLE = [
-  { key: 'auto', label: 'Fit box to text', kind: 'check' },
+  { key: 'box', label: 'Text box', kind: 'toggles', options: [['auto', 'Fit box to text', ACTION_ICONS.fitText]] },
   { key: 'font', label: 'Font', kind: 'fonts' },
   { key: 'size', label: 'Font size', kind: 'slider', min: 6, max: 96 },
   {
