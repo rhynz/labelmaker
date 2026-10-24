@@ -16,6 +16,8 @@ const ACTION_ICONS = {
   left: svg('<line x1="2.5" y1="2" x2="2.5" y2="18"/><rect x="5.5" y="6" width="11" height="8" rx="1.5"/>'),
   centerH: svg('<line x1="10" y1="2" x2="10" y2="18" stroke-dasharray="2 2"/><rect x="4.5" y="6" width="11" height="8" rx="1.5"/>'),
   right: svg('<line x1="17.5" y1="2" x2="17.5" y2="18"/><rect x="3.5" y="6" width="11" height="8" rx="1.5"/>'),
+  top: svg('<line x1="2" y1="2.5" x2="18" y2="2.5"/><rect x="6" y="5.5" width="8" height="11" rx="1.5"/>'),
+  bottom: svg('<line x1="2" y1="17.5" x2="18" y2="17.5"/><rect x="6" y="3.5" width="8" height="11" rx="1.5"/>'),
   centerV: svg('<line x1="2" y1="10" x2="18" y2="10" stroke-dasharray="2 2"/><rect x="6" y="4.5" width="8" height="11" rx="1.5"/>'),
   fill: svg('<path d="M3 7V3h4M13 3h4v4M17 13v4h-4M7 17H3v-4"/><rect x="7" y="7" width="6" height="6" rx="1"/>'),
   front: svg('<rect x="2.5" y="2.5" width="10" height="10" rx="1.5" stroke-dasharray="2 2"/><rect x="7.5" y="7.5" width="10" height="10" rx="1.5" fill="currentColor"/>'),
@@ -528,6 +530,8 @@ export class Editor {
     const { w, h } = labelDots(this.doc);
     if (where === 'left') el.x = 0;
     if (where === 'right') el.x = w - el.w;
+    if (where === 'top') el.y = 0;
+    if (where === 'bottom') el.y = h - el.h;
     if (where === 'h') el.x = Math.round((w - el.w) / 2);
     if (where === 'v') el.y = Math.round((h - el.h) / 2);
     if (where === 'fill') Object.assign(el, { x: 4, y: 4, w: w - 8, h: h - 8, auto: false }); // keep the stretched box
@@ -581,8 +585,10 @@ export class Editor {
     const groups = [
       [['left', 'Move to the left edge', () => this.alignTo('left')],
         ['centerH', 'Center horizontally', () => this.alignTo('h')],
-        ['right', 'Move to the right edge', () => this.alignTo('right')],
-        ['centerV', 'Center vertically', () => this.alignTo('v')]],
+        ['right', 'Move to the right edge', () => this.alignTo('right')]],
+      [['top', 'Move to the top edge', () => this.alignTo('top')],
+        ['centerV', 'Center vertically', () => this.alignTo('v')],
+        ['bottom', 'Move to the bottom edge', () => this.alignTo('bottom')]],
       [['fill', 'Fill the label', () => this.alignTo('fill')]],
       [['front', 'Bring to front', () => this.reorder(true)],
         ['back', 'Send to back', () => this.reorder(false)]],
