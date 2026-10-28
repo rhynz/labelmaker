@@ -36,10 +36,8 @@ async function step(what, fn) {
   }
 }
 
-// Setup packets sent before every job (same bytes in both reference projects).
-const INIT_PACKETS = [
-  '1f1138', '1f11121f1113', '1f1109', '1f1111', '1f1119', '1f1107', '1f110a1f110202',
-];
+// Status queries the official app sends once per connection (captured from an iPhone Bluetooth log).
+const INIT_PACKETS = ['1f1109', '1f1107', '1f1112', '1f1138', '1f1111', '1f1119', '1f1113'];
 
 // Darkness is not documented for the D30. These are the two density commands
 // used by other Phomemo models; test.html prints test strips with each so we
@@ -86,6 +84,7 @@ export class D30Printer {
       throw new Error('Web Bluetooth not available. Use Chrome on the Mac or Bluefy on iPhone.');
     }
     this.writeChar = null;
+    this.queried = false;
     this.device = await step('choosing the printer', () => navigator.bluetooth.requestDevice(
       showAll
         ? { acceptAllDevices: true, optionalServices: CANDIDATE_SERVICES }
@@ -203,19 +202,21 @@ export class D30Printer {
 
   async send(raster, copies, { density = null } = {}) {
     if (!this.connected) throw new Error('Printer not connected');
-    // Each copy gets the full setup and reset: without them the printer waits ~30 s before the next image.
-    for (let n = 0; n < copies; n++) {
+    if (!this.queried) {
       for (const p of INIT_PACKETS) await this.write(hex(p));
-      const { widthBytes: w, rows: h } = raster;
-      // 1f 11 24 00 (D30 prefix) · 1b 40 (ESC @ reset) · 1d 76 30 00 (GS v 0, raster) · width bytes LE · rows LE
-      await this.write(Uint8Array.of(0x1f, 0x11, 0x24, 0x00, 0x1b, 0x40));
-      const cmd = density && DENSITY_COMMANDS[density.method];
-      if (cmd) await this.write(cmd.bytes(density.value)); // after ESC @ so the reset doesn't undo it
-      await this.write(Uint8Array.of(0x1d, 0x76, 0x30, 0x00, w & 0xff, w >> 8, h & 0xff, h >> 8));
-      await this.writeRaster(raster);
-      await this.write(Uint8Array.of(0x1b, 0x64, 0x00)); // ESC d 0: end of label, or the printer waits ~25 s for more
-      this.log(`Sent copy ${n + 1}/${copies}: ${w * 8}×${h} dots, ${raster.bytes.length} bytes, ${this.writeMode} writes`);
-      if (n < copies - 1) await sleep(1500);
+      this.queried = true;
     }
+    // The official app's job: the image is sent once and the printer repeats it. Sending it once
+    // per copy made the printer sit ~25 s before each one after the first.
+    const n = Math.min(Math.max(1, copies), 255);
+    const { widthBytes: w, rows: h } = raster;
+    // 1f 11 02 02 (darkness) · 1f 11 0a (labels with gaps) · 1f 11 21 n (copies) · 1b 40 (ESC @) · 1f 11 35 00
+    await this.write(Uint8Array.of(0x1f, 0x11, 0x02, 0x02, 0x1f, 0x11, 0x0a, 0x1f, 0x11, 0x21, n, 0x1b, 0x40, 0x1f, 0x11, 0x35, 0x00));
+    const cmd = density && DENSITY_COMMANDS[density.method];
+    if (cmd) await this.write(cmd.bytes(density.value)); // after ESC @ so the reset doesn't undo it
+    // 1d 76 30 00 (GS v 0, raster) · width bytes LE · rows LE
+    await this.write(Uint8Array.of(0x1d, 0x76, 0x30, 0x00, w & 0xff, w >> 8, h & 0xff, h >> 8));
+    await this.writeRaster(raster);
+    this.log(`Sent ${n} ${n > 1 ? 'copies' : 'copy'}: ${w * 8}×${h} dots, ${raster.bytes.length} bytes, ${this.writeMode} writes`);
   }
 }
