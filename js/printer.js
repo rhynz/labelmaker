@@ -203,18 +203,18 @@ export class D30Printer {
 
   async send(raster, copies, { density = null } = {}) {
     if (!this.connected) throw new Error('Printer not connected');
-    // Setup and reset once per job: re-sending them for each copy, while the printer is still
-    // printing the previous label, stalled it for 30-60 s between copies.
-    for (const p of INIT_PACKETS) await this.write(hex(p));
-    const { widthBytes: w, rows: h } = raster;
-    // 1f 11 24 00 (D30 prefix) · 1b 40 (ESC @ reset) · 1d 76 30 00 (GS v 0, raster) · width bytes LE · rows LE
-    await this.write(Uint8Array.of(0x1f, 0x11, 0x24, 0x00, 0x1b, 0x40));
-    const cmd = density && DENSITY_COMMANDS[density.method];
-    if (cmd) await this.write(cmd.bytes(density.value)); // after ESC @ so the reset doesn't undo it
+    // Each copy gets the full setup and reset: without them the printer waits ~30 s before the next image.
     for (let n = 0; n < copies; n++) {
+      for (const p of INIT_PACKETS) await this.write(hex(p));
+      const { widthBytes: w, rows: h } = raster;
+      // 1f 11 24 00 (D30 prefix) · 1b 40 (ESC @ reset) · 1d 76 30 00 (GS v 0, raster) · width bytes LE · rows LE
+      await this.write(Uint8Array.of(0x1f, 0x11, 0x24, 0x00, 0x1b, 0x40));
+      const cmd = density && DENSITY_COMMANDS[density.method];
+      if (cmd) await this.write(cmd.bytes(density.value)); // after ESC @ so the reset doesn't undo it
       await this.write(Uint8Array.of(0x1d, 0x76, 0x30, 0x00, w & 0xff, w >> 8, h & 0xff, h >> 8));
       await this.writeRaster(raster);
       this.log(`Sent copy ${n + 1}/${copies}: ${w * 8}×${h} dots, ${raster.bytes.length} bytes, ${this.writeMode} writes`);
+      if (n < copies - 1) await sleep(1500);
     }
   }
 }
