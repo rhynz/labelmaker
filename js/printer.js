@@ -142,17 +142,30 @@ export class D30Printer {
     const step = widthBytes * this.rowsPerChunk;
     const start = performance.now();
     let due = 0; // ms after start when the next chunk may go
+    let missed = 0;
     for (let i = 0; i < bytes.length; i += step) {
       const chunk = bytes.subarray(i, i + step);
       const wait = start + due - performance.now();
       if (wait > 0) await sleep(wait);
+      // The official app sends each chunk only after the printer's "01 01" for the last one;
+      // chunks sent before it can be lost, leaving the printer feeding blank labels.
+      const ready = this.nextAck(1000);
       if (this.writeMode === 'confirmed' || !this.writeChar.properties.writeWithoutResponse) await this.writeChar.writeValueWithResponse(chunk);
       else await this.writeChar.writeValueWithoutResponse(chunk);
+      if (!(await ready)) missed++;
       let dots = 0;
       for (const b of chunk) for (let v = b; v; v &= v - 1) dots++;
       due += (chunk.length / widthBytes) * this.msPerRow + dots * this.msPerDot;
     }
-    this.log(`Image sent in ${((performance.now() - start) / 1000).toFixed(1)} s`);
+    this.log(`Image sent in ${((performance.now() - start) / 1000).toFixed(1)} s${missed ? `, ${missed} chunks without a reply` : ''}`);
+  }
+
+  // Resolves true on the printer's next "01 01", or false after ms.
+  nextAck(ms) {
+    return new Promise((resolve) => {
+      const timer = setTimeout(() => { this.onAck = null; resolve(false); }, ms);
+      this.onAck = () => { clearTimeout(timer); this.onAck = null; resolve(true); };
+    });
   }
 
   // Repeats of the same message are counted rather than logged one by one.
@@ -161,6 +174,7 @@ export class D30Printer {
     let last = null, repeats = 0;
     ch.addEventListener('characteristicvaluechanged', (e) => {
       const msg = [...new Uint8Array(e.target.value.buffer)].map((b) => b.toString(16).padStart(2, '0')).join(' ');
+      if (msg === '01 01') this.onAck?.();
       if (msg === last) {
         repeats++;
         if (repeats % 50 === 0) this.log(`  ← ${uuidShort(ch.uuid)}: ${msg} (×${repeats + 1} so far)`);
