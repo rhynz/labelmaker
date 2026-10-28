@@ -302,15 +302,18 @@ $('#printNow').onclick = async () => {
   if (!printer.connected) await connectPrinter();
   if (!printer.connected) { btn.disabled = false; return; }
   $('#printStatus').textContent = 'Printing…';
-  try {
-    await sendToPrinter(editor.doc, s, s.copies);
-    store.addHistory(structuredClone(editor.doc), await thumbnail(editor.doc));
-    $('#printStatus').textContent = 'Printed ✓';
-    setTimeout(() => $('#printDialog').close(), 900);
-  } catch (e) {
-    $('#printStatus').textContent = `Error: ${e.message}`;
-  }
+  // Print in the background so the app stays usable while the labels come out.
+  const doc = structuredClone(editor.doc);
+  const job = sendToPrinter(doc, s, s.copies);
+  $('#printDialog').close();
   btn.disabled = false;
+  try {
+    await job;
+    store.addHistory(doc, await thumbnail(doc));
+    toast(s.copies > 1 ? `Printed ${s.copies} copies ✓` : 'Printed ✓');
+  } catch (e) {
+    toast(`Print failed: ${e.message}`);
+  }
 };
 
 // ---------- batch print ----------

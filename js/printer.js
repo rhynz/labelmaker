@@ -61,10 +61,10 @@ export class D30Printer {
     this.chunkSize = 100; // bytes per BLE write
     this.chunkDelay = 20; // ms between writes, so the printer buffer keeps up
     this.queue = Promise.resolve(); // print jobs run one at a time
-    // Confirmed writes (when the printer offers them) can't be silently dropped, unlike
-    // write-without-response. Dropped bytes leave the printer waiting for the rest of
-    // the label, feeding blank labels.
-    this.confirmWrites = true;
+    // Confirmed writes can't be silently dropped, but each one waits ~0.75 s for the printer's
+    // reply (30 s per label, sometimes a 30 s hang). The raster pacing below already keeps the
+    // printer from overflowing, so unconfirmed writes are the default.
+    this.confirmWrites = false;
     // Raster pacing. The printer slows down on heavily black lines; sending faster than it
     // prints overflows its buffer, the lost bytes leave it waiting for the rest of the
     // label, and it feeds blank labels. So rows are sent at about print speed, slower for dark ones.
@@ -203,17 +203,18 @@ export class D30Printer {
 
   async send(raster, copies, { density = null } = {}) {
     if (!this.connected) throw new Error('Printer not connected');
+    // Setup and reset once per job: re-sending them for each copy, while the printer is still
+    // printing the previous label, stalled it for 30-60 s between copies.
+    for (const p of INIT_PACKETS) await this.write(hex(p));
+    const { widthBytes: w, rows: h } = raster;
+    // 1f 11 24 00 (D30 prefix) · 1b 40 (ESC @ reset) · 1d 76 30 00 (GS v 0, raster) · width bytes LE · rows LE
+    await this.write(Uint8Array.of(0x1f, 0x11, 0x24, 0x00, 0x1b, 0x40));
+    const cmd = density && DENSITY_COMMANDS[density.method];
+    if (cmd) await this.write(cmd.bytes(density.value)); // after ESC @ so the reset doesn't undo it
     for (let n = 0; n < copies; n++) {
-      for (const p of INIT_PACKETS) await this.write(hex(p));
-      const { widthBytes: w, rows: h } = raster;
-      // 1f 11 24 00 (D30 prefix) · 1b 40 (ESC @ reset) · 1d 76 30 00 (GS v 0, raster) · width bytes LE · rows LE
-      await this.write(Uint8Array.of(0x1f, 0x11, 0x24, 0x00, 0x1b, 0x40));
-      const cmd = density && DENSITY_COMMANDS[density.method];
-      if (cmd) await this.write(cmd.bytes(density.value)); // after ESC @ so the reset doesn't undo it
       await this.write(Uint8Array.of(0x1d, 0x76, 0x30, 0x00, w & 0xff, w >> 8, h & 0xff, h >> 8));
       await this.writeRaster(raster);
       this.log(`Sent copy ${n + 1}/${copies}: ${w * 8}×${h} dots, ${raster.bytes.length} bytes, ${this.writeMode} writes`);
-      if (n < copies - 1) await sleep(1500);
     }
   }
 }
