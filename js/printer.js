@@ -59,16 +59,10 @@ export class D30Printer {
     this.chunkSize = 100; // bytes per BLE write
     this.chunkDelay = 20; // ms between writes, so the printer buffer keeps up
     this.queue = Promise.resolve(); // print jobs run one at a time
-    // Confirmed writes can't be silently dropped, but each one waits ~0.75 s for the printer's
-    // reply (30 s per label, sometimes a 30 s hang). The raster pacing below already keeps the
-    // printer from overflowing, so unconfirmed writes are the default.
+    // Confirmed writes wait ~0.75 s each for the printer's reply (30 s per label). Waiting for
+    // its "01 01" notification instead (see writeRaster) paces the data just as safely.
     this.confirmWrites = false;
-    // Raster pacing. The printer slows down on heavily black lines; sending faster than it
-    // prints overflows its buffer, the lost bytes leave it waiting for the rest of the
-    // label, and it feeds blank labels. So rows are sent at about print speed, slower for dark ones.
     this.rowsPerChunk = 8; // 96 bytes: whole rows, under the BLE packet size
-    this.msPerRow = 7; // ~18 mm/s, a little under the printer's own speed
-    this.msPerDot = 0.06; // extra time per black dot
   }
 
   get writeMode() {
@@ -138,35 +132,21 @@ export class D30Printer {
 
   // Log what the printer sends back (status bytes).
   // Send the image a few rows at a time, no faster than the printer can print them.
+  // Send the image as fast as the printer takes it, as the official app does: each chunk right
+  // after the printer's "01 01" for the last one. Sending slower than it prints (as we used to)
+  // made it stop mid-label and feed blank labels.
   async writeRaster({ bytes, widthBytes }) {
     const step = widthBytes * this.rowsPerChunk;
     const start = performance.now();
-    let due = 0; // ms after start when the next chunk may go
     let missed = 0;
     for (let i = 0; i < bytes.length; i += step) {
       const chunk = bytes.subarray(i, i + step);
-      const wait = start + due - performance.now();
-      if (wait > 0) await sleep(wait);
-      // The official app sends each chunk only after the printer's "01 01" for the last one;
-      // chunks sent before it can be lost, leaving the printer feeding blank labels.
       const ready = this.nextAck(1000);
       if (this.writeMode === 'confirmed' || !this.writeChar.properties.writeWithoutResponse) await this.writeChar.writeValueWithResponse(chunk);
       else await this.writeChar.writeValueWithoutResponse(chunk);
       if (!(await ready)) missed++;
-      let dots = 0;
-      for (const b of chunk) for (let v = b; v; v &= v - 1) dots++;
-      due += (chunk.length / widthBytes) * this.msPerRow + dots * this.msPerDot;
     }
-    let black = 0, darkest = 0, heavy = 0;
-    for (let r = 0; r < bytes.length; r += widthBytes) {
-      let dots = 0;
-      for (const b of bytes.subarray(r, r + widthBytes)) for (let v = b; v; v &= v - 1) dots++;
-      black += dots;
-      darkest = Math.max(darkest, dots);
-      if (dots > widthBytes * 6) heavy++; // over 75% black
-    }
-    const pct = (n, of) => Math.round((100 * n) / of);
-    this.log(`Image sent in ${((performance.now() - start) / 1000).toFixed(1)} s, ${pct(black, bytes.length * 8)}% black, darkest row ${pct(darkest, widthBytes * 8)}%, ${heavy} rows over 75%${missed ? `, ${missed} chunks without a reply` : ''}`);
+    this.log(`Image sent in ${((performance.now() - start) / 1000).toFixed(1)} s${missed ? `, ${missed} chunks without a reply` : ''}`);
   }
 
   // Resolves true on the printer's next "01 01", or false after ms.
