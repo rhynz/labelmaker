@@ -157,7 +157,9 @@ export class D30Printer {
       for (const b of chunk) for (let v = b; v; v &= v - 1) dots++;
       due += (chunk.length / widthBytes) * this.msPerRow + dots * this.msPerDot;
     }
-    this.log(`Image sent in ${((performance.now() - start) / 1000).toFixed(1)} s${missed ? `, ${missed} chunks without a reply` : ''}`);
+    let black = 0;
+    for (const b of bytes) for (let v = b; v; v &= v - 1) black++;
+    this.log(`Image sent in ${((performance.now() - start) / 1000).toFixed(1)} s, ${Math.round((100 * black) / (bytes.length * 8))}% black${missed ? `, ${missed} chunks without a reply` : ''}`);
   }
 
   // Resolves true on the printer's next "01 01", or false after ms.
